@@ -1,0 +1,6 @@
+slug,category,host_port,internal_ports,image,notes
+web-jwtopia,web,10001,,ctf/web-jwtopia:1.0.0,jwt alg-confusion + ssti
+web-silent-channel,web,10002,,ctf/web-silent-channel:1.0.0,wordpress 5.6 + mysql(internal) CVE-2021-29447
+web-docparser,web,10003,7777,ctf/web-docparser:1.0.0,7777 internal-only SSRF target (single container)
+web-token-ghost,web,10004,,ctf/web-token-ghost:1.0.0,jwt alg-confusion + ssti
+web-joombreaker,web,10005,,ctf/web-joombreaker:1.0.0,joomla 4.2.6 + mysql(internal) CVE-2023-23752

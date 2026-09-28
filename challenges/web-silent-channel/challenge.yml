@@ -1,0 +1,17 @@
+name: "Silent Channel"
+slug: web-silent-channel
+category: web
+difficulty: hard
+author: o.ruzimatov@csec.uz
+host_port: 10002
+internal_ports: []
+image: ctf/web-silent-channel:1.0.0
+stateful: true
+healthcheck_url: "http://TARGET/wp-login.php"
+flag_format: "CTF{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: scheduled
+hardening_exceptions: ["read_only", "user", "cap_drop"]
+notes: "WordPress 5.6 media-upload XXE (CVE-2021-29447) -> wp-config creds -> webshell -> /flag.txt. Stateful: auto-reset on cron."

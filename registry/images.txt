@@ -1,0 +1,7 @@
+# Base images to pre-pull before the event (event day must not depend on live pulls).
+# Usage:  xargs -a registry/images.txt -I{} docker pull {}
+python:3.12-slim
+mysql:8.0
+wordpress:5.6-php8.0-apache
+wordpress:cli-php8.0
+joomla:4.2.6-php8.1-apache

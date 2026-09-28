@@ -1,0 +1,20 @@
+# === SECRETS — never commit ===
+**/flags.env
+**/db.env
+*.pem
+*.key
+
+# committed placeholders are allowed
+!**/flags.env.example
+!**/db.env.example
+
+# === IDE / junk ===
+.idea/
+.vscode/
+*.swp
+__pycache__/
+*.pyc
+
+# === old backups / archives that may contain flags ===
+zips/
+*.orig

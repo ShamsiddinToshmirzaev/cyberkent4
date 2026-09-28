@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+#
+# ctfctl — fleet manager for CTF challenges.
+# Each challenge under challenges/<slug>/ is an independent docker compose project
+# (project name == slug), so operations are always scoped to one task.
+#
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CHDIR="$ROOT/challenges"
+PORTS="$ROOT/ports.csv"
+
+# fleet-wide defaults (optional)
+CTF_HOST="127.0.0.1"
+ADMIN_CIDR="10.0.0.0/24"
+[ -f "$ROOT/.env.global" ] && . "$ROOT/.env.global"
+
+c_red=$'\033[0;31m'; c_grn=$'\033[0;32m'; c_yel=$'\033[1;33m'; c_cya=$'\033[0;36m'; c_off=$'\033[0m'
+info(){ echo "${c_cya}[*]${c_off} $*"; }
+ok(){   echo "${c_grn}[+]${c_off} $*"; }
+warn(){ echo "${c_yel}[!]${c_off} $*"; }
+err(){  echo "${c_red}[x]${c_off} $*" >&2; }
+die(){  err "$*"; exit 1; }
+
+# --- compose wrapper (supports both `docker compose` and legacy `docker-compose`) ---
+compose(){
+  local slug="$1"; shift
+  local dir="$CHDIR/$slug"
+  [ -d "$dir" ] || die "unknown challenge: $slug"
+  local envs=(--env-file "$dir/.env")
+  [ -f "$dir/flags.env" ] && envs+=(--env-file "$dir/flags.env")
+  [ -f "$dir/db.env" ]    && envs+=(--env-file "$dir/db.env")
+  ( cd "$dir" && docker compose -p "$slug" "${envs[@]}" "$@" )
+}
+
+# --- registry helpers (skip header + blank/comment lines) ---
+all_slugs(){ awk -F, 'NR>1 && $1 !~ /^#/ && NF {print $1}' "$PORTS"; }
+field(){ # field <slug> <colnum>
+  awk -F, -v s="$1" -v c="$2" 'NR>1 && $1==s {print $c}' "$PORTS"
+}
+port_of(){ field "$1" 3; }
+
+# resolve target set: no args or "all" -> every slug; else the listed slugs
+targets(){
+  if [ "$#" -eq 0 ] || [ "${1:-}" = "all" ]; then all_slugs; else printf '%s\n' "$@"; fi
+}
+
+require_flags(){ # warn (don't fail) if a challenge has no flags.env yet
+  local slug="$1"
+  if [ ! -f "$CHDIR/$slug/flags.env" ]; then
+    warn "$slug: no flags.env (copy flags.env.example -> flags.env and set FLAG=...)"
+  fi
+}
+
+cmd_up(){
+  for s in $(targets "$@"); do
+    require_flags "$s"
+    info "up $s"; compose "$s" up -d --build && ok "$s up"
+  done
+}
+
+cmd_down(){
+  for s in $(targets "$@"); do
+    info "down $s"; compose "$s" down && ok "$s down"
+  done
+}
+
+cmd_reset(){
+  # destructive: wipes this task's volumes then re-provisions. Scoped to one project.
+  for s in $(targets "$@"); do
+    info "reset $s (down -v + up)"; compose "$s" down -v; compose "$s" up -d --build && ok "$s reset"
+  done
+}
+
+cmd_build(){
+  for s in $(targets "$@"); do info "build $s"; compose "$s" build && ok "$s built"; done
+}
+
+cmd_status(){
+  printf "%-22s %-7s %-10s %s\n" "SLUG" "PORT" "PORTCHK" "CONTAINERS"
+  for s in $(targets "$@"); do
+    local p; p="$(port_of "$s")"
+    local chk="n/a"
+    if [ -n "$p" ]; then
+      if (exec 3<>"/dev/tcp/$CTF_HOST/$p") 2>/dev/null; then chk="${c_grn}open${c_off}"; else chk="${c_red}closed${c_off}"; fi
+    fi
+    local cs; cs="$(compose "$s" ps --format '{{.Name}}({{.State}})' 2>/dev/null | paste -sd' ' -)"
+    printf "%-22s %-7s %-10b %s\n" "$s" "${p:-–}" "$chk" "${cs:-<none>}"
+  done
+}
+
+cmd_test(){
+  local rc=0
+  for s in $(targets "$@"); do
+    local dir="$CHDIR/$s" p; p="$(port_of "$s")"
+    if [ ! -f "$dir/solution/smoke_test.py" ]; then warn "$s: no smoke_test.py, skipping"; continue; fi
+    info "test $s -> http://$CTF_HOST:$p"
+    if TARGET="http://$CTF_HOST:$p" FLAGS_ENV="$dir/flags.env" timeout 120 python3 "$dir/solution/smoke_test.py"; then
+      ok "PASS $s"
+    else
+      err "FAIL $s"; rc=1
+    fi
+  done
+  return $rc
+}
+
+cmd_ports(){
+  # validate: unique host ports, and each .env HOST_PORT matches the registry
+  local bad=0
+  local dups; dups="$(awk -F, 'NR>1 && $3 {print $3}' "$PORTS" | sort | uniq -d)"
+  if [ -n "$dups" ]; then err "duplicate host ports in ports.csv: $dups"; bad=1; fi
+  for s in $(all_slugs); do
+    local reg envp; reg="$(port_of "$s")"
+    if [ -f "$CHDIR/$s/.env" ]; then
+      envp="$(grep -E '^HOST_PORT=' "$CHDIR/$s/.env" | cut -d= -f2 | tr -d '[:space:]' || true)"
+      if [ -n "$envp" ] && [ "$envp" != "$reg" ]; then
+        err "$s: .env HOST_PORT=$envp != ports.csv $reg"; bad=1
+      fi
+    else
+      warn "$s: no .env"
+    fi
+  done
+  [ "$bad" -eq 0 ] && ok "ports OK (no dupes, no drift)" || return 1
+}
+
+cmd_firewall(){
+  echo "# generated from ports.csv — review before applying"
+  echo "ufw default deny incoming"
+  echo "ufw default allow outgoing"
+  echo "ufw allow from $ADMIN_CIDR to any port 22 proto tcp"
+  for s in $(all_slugs); do
+    local p; p="$(port_of "$s")"
+    [ -n "$p" ] && echo "ufw allow $p/tcp   # $s"
+  done
+  echo "ufw --force enable"
+}
+
+cmd_scoreboard(){
+  # manifest for the in-house scoreboard: slug, category, endpoint, flag
+  printf "slug,category,endpoint,flag\n"
+  for s in $(all_slugs); do
+    local cat p flag; cat="$(field "$s" 2)"; p="$(port_of "$s")"
+    flag="$(grep -E '^FLAG=' "$CHDIR/$s/flags.env" 2>/dev/null | head -1 | cut -d= -f2- || echo '<unset>')"
+    printf "%s,%s,http://%s:%s,%s\n" "$s" "$cat" "$CTF_HOST" "$p" "$flag"
+  done
+}
+
+usage(){
+  cat <<EOF
+ctfctl — CTF fleet manager
+
+  ctfctl up      [slug|all]   build + start (detached)
+  ctfctl down    [slug|all]   stop, keep volumes
+  ctfctl reset   [slug|all]   DESTRUCTIVE: down -v + up (wipes this task's state, re-provisions)
+  ctfctl build   [slug|all]   build images only
+  ctfctl status  [slug|all]   containers + host-port reachability
+  ctfctl test    [slug|all]   run solution/smoke_test.py against the live host_port
+  ctfctl ports                validate ports.csv (no dupes, no drift vs .env)
+  ctfctl firewall             print ufw rules derived from ports.csv
+  ctfctl scoreboard           print slug,category,endpoint,flag manifest
+
+Challenges: $(all_slugs | paste -sd' ' -)
+EOF
+}
+
+main(){
+  local cmd="${1:-}"; shift || true
+  case "$cmd" in
+    up) cmd_up "$@";;
+    down) cmd_down "$@";;
+    reset) cmd_reset "$@";;
+    build) cmd_build "$@";;
+    status) cmd_status "$@";;
+    test) cmd_test "$@";;
+    ports) cmd_ports "$@";;
+    firewall) cmd_firewall "$@";;
+    scoreboard) cmd_scoreboard "$@";;
+    ""|-h|--help|help) usage;;
+    *) err "unknown command: $cmd"; usage; exit 1;;
+  esac
+}
+main "$@"

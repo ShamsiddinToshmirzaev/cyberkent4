@@ -1,0 +1,4 @@
+# Deps for the smoke tests / solvers (ctfctl test). Install on the ops host:
+#   python3 -m pip install -r ops/requirements-solver.txt
+requests>=2.31
+cryptography>=42.0

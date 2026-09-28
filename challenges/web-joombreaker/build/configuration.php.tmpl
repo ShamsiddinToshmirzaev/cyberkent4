@@ -1,0 +1,47 @@
+<?php
+class JConfig {
+    public $sitename      = 'Gov Portal';
+    public $secret        = '${CTF_SECRET}';
+    public $db            = '${CTF_DB_NAME}';
+    public $dbprefix      = 'jos_';
+    public $dbtype        = 'mysqli';
+    public $host          = '${CTF_DB_HOST}';
+    public $user          = '${CTF_DB_USER}';
+    public $password      = '${CTF_DB_PASSWORD}';
+    public $tmp_path      = '/var/www/html/tmp';
+    public $log_path      = '/var/www/html/administrator/logs';
+    public $debug         = 0;
+    public $sef           = 1;
+    public $sef_rewrite   = 0;
+    public $caching       = 0;
+    public $offset        = 'UTC';
+    public $editor        = 'tinymce';
+    public $lifetime      = 15;
+    public $session_handler = 'database';
+    public $gzip          = 0;
+    public $error_reporting = 'default';
+    public $force_ssl     = 0;
+    public $live_site     = '';
+    public $cookie_domain = '';
+    public $cookie_path   = '';
+    public $MetaAuthor    = 1;
+    public $MetaVersion   = 0;
+    public $robots        = '';
+    public $list_limit    = 20;
+    public $access        = 1;
+    public $feed_limit    = 10;
+    public $cors          = 0;
+    public $cors_allow_origin  = '*';
+    public $cors_allow_headers = 'Content-Type,X-Joomla-Token';
+    public $cors_allow_methods = '';
+    public $mailer        = 'mail';
+    public $mailfrom      = '${CTF_ADMIN_EMAIL}';
+    public $fromname      = 'Gov Portal';
+    public $sendmail      = '/usr/sbin/sendmail';
+    public $smtpauth      = 0;
+    public $smtpssl       = 0;
+    public $smtpport      = 25;
+    public $smtphost      = 'localhost';
+    public $smtpuser      = '';
+    public $smtppass      = '';
+}

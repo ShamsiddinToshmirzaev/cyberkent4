@@ -1,0 +1,17 @@
+name: "JoomBreaker"
+slug: web-joombreaker
+category: web
+difficulty: medium
+author: o.ruzimatov@csec.uz
+host_port: 10005
+internal_ports: []
+image: ctf/web-joombreaker-init:1.0.0
+stateful: true
+healthcheck_url: "http://TARGET/"
+flag_format: "CTF{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: scheduled
+hardening_exceptions: ["read_only", "user", "cap_drop"]
+notes: "Joomla 4.2.6 CVE-2023-23752 unauth API config leak. Provisioned by idempotent init container. Stateful: auto-reset on cron."

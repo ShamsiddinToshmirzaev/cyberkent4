@@ -1,0 +1,17 @@
+name: "Token Ghost"
+slug: web-token-ghost
+category: web
+difficulty: medium
+author: o.ruzimatov@csec.uz
+host_port: 10004
+internal_ports: []
+image: ctf/web-token-ghost:1.0.0
+stateful: false
+healthcheck_url: "http://TARGET/robots.txt"
+flag_format: "CTF{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "RS256->HS256 JWT alg-confusion + Jinja2 SSTI. Near-duplicate of web-jwtopia."

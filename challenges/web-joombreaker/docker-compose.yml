@@ -1,0 +1,110 @@
+name: ${CTF_SLUG}
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# LAMP tier keeps default caps + writable rootfs (see challenge.yml exceptions).
+x-lamp-hardening: &lamp-hardening
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+
+services:
+  db:
+    <<: *lamp-hardening
+    image: mysql:8.0
+    container_name: ctf_${CTF_SLUG}_db
+    # native password so the external mysql client (init container) can authenticate.
+    command: --default-authentication-plugin=mysql_native_password
+    env_file:
+      - ./db.env
+    volumes:
+      - db_data:/var/lib/mysql
+    networks: [backend]
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1536M
+          pids: 512
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-uroot", "-p${MYSQL_ROOT_PASSWORD}", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  joomla:
+    <<: *lamp-hardening
+    image: joomla:4.2.6-php8.1-apache
+    container_name: ctf_${CTF_SLUG}_joomla
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      JOOMLA_DB_HOST: "${JOOMLA_DB_HOST}"
+      JOOMLA_DB_USER: "${JOOMLA_DB_USER}"
+      JOOMLA_DB_PASSWORD: "${JOOMLA_DB_PASSWORD}"
+      JOOMLA_DB_NAME: "${JOOMLA_DB_NAME}"
+    ports:
+      - "${HOST_PORT}:80"
+    volumes:
+      - joomla_data:/var/www/html
+    networks: [backend, frontend]
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+          pids: 512
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://localhost/')===false?1:0);"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    labels:
+      ctf.task: "${CTF_SLUG}"
+      ctf.category: "${CTF_CATEGORY}"
+      ctf.port: "${HOST_PORT}"
+
+  # One-shot idempotent provisioner (replaces host-side start.sh). Exits on success.
+  init:
+    build: ./build
+    image: ${IMAGE}
+    container_name: ctf_${CTF_SLUG}_init
+    restart: "no"
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      db:
+        condition: service_healthy
+      joomla:
+        condition: service_started
+    env_file:
+      - ./db.env
+      - ./flags.env
+    volumes:
+      - joomla_data:/var/www/html
+    networks: [backend]
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+          pids: 128
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true
+
+volumes:
+  db_data:
+  joomla_data:
