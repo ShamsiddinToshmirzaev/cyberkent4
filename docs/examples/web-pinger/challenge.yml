@@ -1,0 +1,17 @@
+name: "Pinger"
+slug: web-pinger
+category: web
+difficulty: easy
+author: you@csec.uz
+proposed_port: 10010          # same number as HOST_PORT in .env
+internal_ports: []
+image: ctf/web-pinger:1.0.0
+stateful: false
+healthcheck_url: "http://TARGET/"
+flag_format: "CTF{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []      # none — this is our own Flask app, fully locked down
+notes: "Network diagnostics page shells out to `ping`; host param is injectable -> RCE, flag in env."

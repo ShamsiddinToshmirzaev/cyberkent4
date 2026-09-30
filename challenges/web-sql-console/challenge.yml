@@ -1,0 +1,17 @@
+name: "SQL Console"
+slug: web-sql-console
+category: web
+difficulty: hard
+author: o.ruzimatov@csec.uz
+host_port: 10008
+internal_ports: []
+image: ctf/web-sql-console:1.0.0
+stateful: true
+healthcheck_url: "http://TARGET/login.php"
+flag_format: "CTF{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: scheduled
+hardening_exceptions: ["read_only", "user", "cap_drop"]
+notes: "index.html base64 / `p` hint -> login.php SQLi with a union+select WAF (bypass with /**/) leaks admin.secret = hidden dd02c7...php console -> log in root/empty -> SELECT LOAD_FILE('/tmp/flag.txt'). Single-container LAMP (php:8.2-apache + MariaDB in-container, DB never host-published). Empty root password + secure_file_priv=\"\" are deliberate. Node files are decoy hints (no Node runtime). Flag from flags.env, DB config from db.env; provisioning idempotent."

@@ -71,6 +71,9 @@ Smoke tests need `requests` + `cryptography` (`pip install -r ops/requirements-s
 | web-docparser | 10003 | no | XXE → SSRF to internal :7777 |
 | web-token-ghost | 10004 | no | JWT alg-confusion + SSTI |
 | web-joombreaker | 10005 | yes | Joomla 4.2.6 unauth API leak (CVE-2023-23752) |
+| web-intranet | 10006 | no | hidden dir + X-Forwarded-For/cookie auth bypass → LFI |
+| web-neon-auth | 10007 | yes | leaked vim .swp source → SQLi LOAD_FILE (in-container MariaDB) |
+| web-sql-console | 10008 | yes | SQLi WAF-bypass → hidden SQL console → LOAD_FILE (in-container MariaDB) |
 
 Per-task specifics worth knowing:
 - **web-docparser** is a single container ON PURPOSE — its exploit is XXE→SSRF to
@@ -85,6 +88,17 @@ Per-task specifics worth knowing:
   one-shot (idempotent). WP 5.6 uses plain permalinks, so REST is at `/?rest_route=/`.
   Set `WP_SITE_URL` in its `.env` to the real public `host:10002` so redirects work.
 - Both LAMP `db` services set `--default-authentication-plugin=mysql_native_password`.
+- **web-intranet / web-neon-auth / web-sql-console** were migrated from `raw_tasks/` (git-ignored
+  third-party submissions) and refitted to the template. All three are `php:8.2-apache`. neon-auth
+  and sql-console are **single-container LAMP by design** (Apache+PHP+MariaDB in one image): both
+  exploits end in MySQL `LOAD_FILE` reading a flag file on the app's own filesystem, so the DB can't
+  be split to a separate service. MariaDB binds localhost in-container, never host-published. Flags
+  come from `flags.env`; DB config from `db.env` (init.sql is envsubst-templated in the entrypoint,
+  idempotent DROP/CREATE). The deliberate vuln knobs — `secure_file_priv=""`, `GRANT FILE`, and
+  sql-console's empty root password — are the intended bugs, listed in each `hardening_exceptions`.
+  web-intranet writes the flag only into the hidden LFI directory (no site-root `/flag.txt`).
+- Entrypoints set the flag default as `FLAG="${FLAG:-}"; [ -n "$FLAG" ] || FLAG='CTF{...}'` — an
+  inline `${FLAG:-CTF{...}}` default mis-parses the nested brace and appends a stray `}`.
 
 ## Operations for 1000 shared players
 - Stateful tasks (silent-channel, joombreaker) get trashed by shared players → **auto-reset on
@@ -93,10 +107,14 @@ Per-task specifics worth knowing:
 - Full event procedure (pre-pull images, health/canary monitoring, ESXi snapshot strategy,
   firewall) is in `ops/RUNBOOK.md`.
 
-## Verification status (2026-09-28)
-All 5 pass end-to-end via `./ctfctl test all`. Stateful resets confirmed idempotent (reset
-twice, re-tested). Only ports 10001–10005 exposed on host; 3306/33060/7777 not reachable.
-Committed on branch `master`, not pushed anywhere.
+## Verification status
+- 2026-09-28: original 5 pass end-to-end via `./ctfctl test all`; stateful resets idempotent;
+  only ports 10001–10005 exposed; 3306/33060/7777 not reachable. Committed on `master`.
+- 2026-09-30: added **web-intranet (10006)**, **web-neon-auth (10007)**, **web-sql-console (10008)**
+  from `raw_tasks/`. All three pass `./ctfctl test`; the two stateful ones reset-then-test twice
+  (idempotent). Their MariaDB 3306 is not host-reachable; only 10006–10008 published. `./ctfctl
+  ports` green. NOT re-run for the original 5 in this session (their folders were untouched), and
+  NOT committed.
 
 ## Outstanding decisions / TODO for the owner
 - [ ] **Rotate all flags + DB passwords** — the originals were committed in the old repo, so

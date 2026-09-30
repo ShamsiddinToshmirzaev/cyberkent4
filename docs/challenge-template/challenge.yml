@@ -1,0 +1,18 @@
+name: "Human Readable Name"
+slug: web-example              # kebab-case, matches the folder name
+category: web                 # web | pwn | crypto | forensics | rev | misc
+difficulty: medium            # easy | medium | hard
+author: you@csec.uz
+proposed_port: 100XX          # your pick from the category range (see the guide, section 5).
+                              # We finalise the real port on our side; you don't get ports.csv.
+internal_ports: []            # ports used only between containers, never published
+image: ctf/web-example:1.0.0  # pin a tag; bump on change
+stateful: false               # true if it has a DB / writable state that players can trash
+healthcheck_url: "http://TARGET/"
+flag_format: "CTF{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none                # none | scheduled  (stateful tasks that need periodic wiping)
+hardening_exceptions: []      # e.g. ["read_only","user"] for LAMP images that need a writable rootfs
+notes: "One-line description of the vuln and the intended solve path."

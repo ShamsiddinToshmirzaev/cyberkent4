@@ -4,3 +4,6 @@ web-silent-channel,web,10002,,ctf/web-silent-channel:1.0.0,wordpress 5.6 + mysql
 web-docparser,web,10003,7777,ctf/web-docparser:1.0.0,7777 internal-only SSRF target (single container)
 web-token-ghost,web,10004,,ctf/web-token-ghost:1.0.0,jwt alg-confusion + ssti
 web-joombreaker,web,10005,,ctf/web-joombreaker:1.0.0,joomla 4.2.6 + mysql(internal) CVE-2023-23752
+web-intranet,web,10006,,ctf/web-intranet:1.0.0,hidden dir + XFF/cookie auth bypass -> LFI
+web-neon-auth,web,10007,,ctf/web-neon-auth:1.0.0,swp source leak -> sqli LOAD_FILE (mysql in-container)
+web-sql-console,web,10008,,ctf/web-sql-console:1.0.0,sqli waf-bypass -> hidden sql console -> LOAD_FILE (mysql in-container)

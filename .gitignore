@@ -18,3 +18,4 @@ __pycache__/
 # === old backups / archives that may contain flags ===
 zips/
 *.orig
+raw_tasks

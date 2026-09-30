@@ -9,6 +9,8 @@ CTF=/opt/ctf/ctf-2026
 
 */30 * * * *   cd $CTF && ./ctfctl reset web-silent-channel >> /var/log/ctf/reset.log 2>&1
 15,45 * * * *  cd $CTF && ./ctfctl reset web-joombreaker    >> /var/log/ctf/reset.log 2>&1
+10,40 * * * *  cd $CTF && ./ctfctl reset web-neon-auth      >> /var/log/ctf/reset.log 2>&1
+20,50 * * * *  cd $CTF && ./ctfctl reset web-sql-console    >> /var/log/ctf/reset.log 2>&1
 
 # Disk safety: prune dangling images/build cache older than a day, off-peak.
 30 4 * * *     docker system prune -f --filter until=24h >> /var/log/ctf/prune.log 2>&1
