@@ -2,14 +2,31 @@
 
 ## One-time VM setup (Ubuntu/Debian on ESXi)
 1. Install Docker Engine + compose plugin: `curl -fsSL https://get.docker.com | sh`.
-2. Put this repo at `/opt/ctf/ctf-2026` (matches `ops/reset.cron`).
-3. `cp .env.global.example .env.global` and set `CTF_HOST` (public IP/DNS) and `ADMIN_CIDR`.
-4. Generate all secrets in one shot: `./ctfctl secrets all` creates any missing `flags.env`/`db.env`
+2. **Expand Docker's network address pools.** Each challenge is its own compose project with its
+   own bridge network; the fleet runs 30+ of them, but Docker's built-in pool only yields ~15
+   `/16`s, so `up` fails with `all predefined address pools have been fully subnetted`. Create
+   `/etc/docker/daemon.json` with a base that is FREE on your host (here `172.16/12` is already
+   used by the LAN + other stacks, so we use `10.x`) and a small `/24` size so you get hundreds
+   of subnets:
+   ```json
+   {
+     "default-address-pools": [
+       { "base": "10.200.0.0/16", "size": 24 },
+       { "base": "10.201.0.0/16", "size": 24 }
+     ]
+   }
+   ```
+   Then `sudo systemctl restart docker` (restarts all containers; `restart: unless-stopped` brings
+   them back). Verify with `docker info | grep -iA3 'address pool'`. Confirm your chosen base is
+   unused first: `ip -4 route | grep -E '(^|[^0-9])10\.'` should print nothing.
+3. Put this repo at `/opt/ctf/ctf-2026` (matches `ops/reset.cron`).
+4. `cp .env.global.example .env.global` and set `CTF_HOST` (public IP/DNS) and `ADMIN_CIDR`.
+5. Generate all secrets in one shot: `./ctfctl secrets all` creates any missing `flags.env`/`db.env`
    with random values; `./ctfctl rotate all` regenerates them (do this once at setup —
    **it rotates every flag/password that was ever committed to the old repo**). Review any
    challenge-specific values (e.g. an intentionally-empty DB password) afterwards.
-5. Put `/var/lib/docker` on a sized, monitored disk.
-6. `python3 -m pip install -r ops/requirements-solver.txt` (for smoke tests).
+6. Put `/var/lib/docker` on a sized, monitored disk.
+7. `python3 -m pip install -r ops/requirements-solver.txt` (for smoke tests).
 
 ## Pre-event (do this before players connect)
 1. Pre-pull base images so event day doesn't depend on live registry:

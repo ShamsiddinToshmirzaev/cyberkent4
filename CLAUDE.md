@@ -158,6 +158,14 @@ Per-task specifics worth knowing:
   one-shot (idempotent). WP 5.6 uses plain permalinks, so REST is at `/?rest_route=/`.
   Set `WP_SITE_URL` in its `.env` to the real public `host:10002` so redirects work.
 - Both LAMP `db` services set `--default-authentication-plugin=mysql_native_password`.
+- **Coupled DB creds + rotate/reset:** some `db.env` fields must hold the SAME value (silent-channel
+  `MYSQL_PASSWORD`==`WORDPRESS_DB_PASSWORD`; joombreaker `MYSQL_PASSWORD`==`JOOMLA_DB_PASSWORD`==
+  `CTF_DB_PASSWORD`). The example files encode this by repeating one placeholder, and `gen_dbenv`
+  gives identical placeholder values the SAME generated password (so `rotate`/`secrets` keep them
+  in sync). MySQL bakes its user password into the data VOLUME at first init, so after any
+  `rotate`/`db.env` change a stateful DB task must be **`./ctfctl reset <slug>`** (down -v wipes the
+  volume) — a plain `up` fails with `Access denied for user ...` and, because the WP/Joomla
+  healthcheck then never passes, the install one-shot never runs and `up` hangs.
 - **web-intranet / web-neon-auth / web-sql-console** were migrated from `raw_tasks/` (git-ignored
   third-party submissions) and refitted to the template. All three are `php:8.2-apache`. neon-auth
   and sql-console are **single-container LAMP by design** (Apache+PHP+MariaDB in one image): both
@@ -215,6 +223,15 @@ Per-task specifics worth knowing:
   `author:` (source of truth), surfaced as a new `author` column in `ports.csv` (col 6, before
   notes — cols 1–5 unchanged so all `field()` reads still valid) and in `./ctfctl index`
   (table + `--json`). `ctfctl add`/`new` now populate the column. Not committed.
+
+- 2026-10-02 (db-cred desync fix): `./ctfctl rotate all` (run during the CTF4 switch) had
+  desynced coupled DB passwords because `gen_dbenv` randomized each `*PASSWORD` field
+  independently — WordPress/Joomla then got a different password than their MySQL user, so
+  `web-silent-channel` hung on `up` (wp healthcheck stuck at 500 -> wpcli installer never ran).
+  Fixed `gen_dbenv` to map identical example placeholders to one shared password; regenerated
+  silent-channel + joombreaker `db.env`; `reset` both (down -v to clear the stale MySQL volume).
+  Both now PASS smoke. Also added the `default-address-pools` host-prep (see RUNBOOK) that this
+  surfaced alongside. Not committed.
 
 ## Outstanding decisions / TODO for the owner
 - [ ] **Rotate all flags + DB passwords** — the originals were committed in the old repo, so

@@ -77,15 +77,18 @@ next_port(){ # first free host port in the category band
 # --- secret generators ---
 gen_flag(){ echo "CTF4{$(openssl rand -hex 16)}"; }
 gen_pw(){ openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24; }
-gen_dbenv(){ # gen_dbenv <db.env.example>  -> body with password-like non-empty values randomized
-  local ex="$1" k v
+gen_dbenv(){ # gen_dbenv <db.env.example> -> randomize password-like non-empty values.
+  # Fields whose placeholder VALUE is identical in the example get the SAME generated
+  # password, so coupled creds stay in sync (e.g. MYSQL_PASSWORD == WORDPRESS_DB_PASSWORD).
+  local ex="$1" k v line; declare -A _seen
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
       \#*|"") echo "$line";;
       *=*)
         k="${line%%=*}"; v="${line#*=}"
         if printf '%s' "$k" | grep -qiE '(PASS|PASSWORD|PWD|SECRET)' && [ -n "$v" ]; then
-          echo "$k=$(gen_pw)"
+          [ -n "${_seen[$v]+x}" ] || _seen[$v]="$(gen_pw)"
+          echo "$k=${_seen[$v]}"
         else echo "$line"; fi;;
       *) echo "$line";;
     esac
