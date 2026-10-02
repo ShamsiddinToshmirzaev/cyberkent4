@@ -87,7 +87,7 @@ def admin_report():
     template = data.get('template', '')
 
     # BUG: foydalanuvchi kiritgan template to'g'ridan-to'g'ri render qilinadi
-    output = render_template_string(template, user=claims['sub'])
+    output = render_template_string(template, user=claims['sub'], flag=FLAG)
     return jsonify({'output': output})
 
 
