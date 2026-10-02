@@ -7,7 +7,7 @@ from flask import Flask, render_template_string, request
 app = Flask(__name__)
 
 # Injected at runtime from flags.env. The fallback is only for local dev.
-FLAG = os.environ.get("FLAG", "CTF{local_dev_flag}")
+FLAG = os.environ.get("FLAG", "CTF4{local_dev_flag}")
 
 PAGE = """
 <!doctype html>

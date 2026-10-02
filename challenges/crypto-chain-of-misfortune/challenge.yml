@@ -1,0 +1,17 @@
+name: "Chain of Misfortune"
+slug: crypto-chain-of-misfortune
+category: crypto
+difficulty: hard
+author: Giyosiddin
+host_port: 12002
+internal_ports: []
+image: ctf/crypto-chain-of-misfortune:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "Difficulty tier (source): insane. EIP-712 typed-data domain confusion (Go service); replay a signature across domains to forge the backstage authorization."

@@ -1,0 +1,17 @@
+name: "CBOR Time Machine"
+slug: crypto-cbor-time-machine
+category: crypto
+difficulty: hard
+author: Giyosiddin
+host_port: 12001
+internal_ports: []
+image: ctf/crypto-cbor-time-machine:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "Difficulty tier (source): extreme. CBOR duplicate-key parser differential: issuer signs first-wins, customs reads last-wins; smuggle forbidden cargo past both."

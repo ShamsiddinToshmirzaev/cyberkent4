@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# CTF fleet pre-commit gate: lint every challenge + block committed secrets.
+# Enable with:  ./ctfctl install-hooks   (sets core.hooksPath=ops/hooks)
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+echo "[pre-commit] ctfctl lint all"
+if ! ./ctfctl lint all; then
+  echo "[pre-commit] lint failed — commit blocked (run './ctfctl lint <slug>' to see why)"; exit 1
+fi
+
+# Never let a real secret get staged.
+if git diff --cached --name-only | grep -qE '(^|/)(flags|db)\.env$'; then
+  echo "[pre-commit] refusing to commit flags.env/db.env (they are git-ignored for a reason)"; exit 1
+fi
+echo "[pre-commit] OK"

@@ -1,0 +1,22 @@
+# Single hardened service. Each `up` generates a fresh random instance.
+#   docker compose -f deploy/docker-compose.yml up --build
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      PORT: "9120"
+    ports:
+      - "9120:9120"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./seccomp.json
+    healthcheck:
+      test: ["CMD", "python3", "deploy/healthcheck.sh"]
+      interval: 15s
+      timeout: 5s
+      retries: 3

@@ -1,0 +1,17 @@
+name: "Minerva FM"
+slug: crypto-minerva-fm
+category: crypto
+difficulty: hard
+author: Giyosiddin
+host_port: 12007
+internal_ports: [5001]
+image: ctf/crypto-minerva-fm:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "Difficulty tier (source): extreme. Minerva-style ECDSA short-nonce timing side-channel (HNP + LLL) against a C signer; recover the P-256 key and forge the ghost-dj manifest. Multi-service (init+signer+gateway, C signer built in-container). smoke_test is liveness-only: the solver in solution/ needs the per-instance public bundle over raw-TCP plus a wall-clock timing side-channel."

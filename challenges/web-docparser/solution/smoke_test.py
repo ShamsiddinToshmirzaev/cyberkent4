@@ -55,7 +55,7 @@ def solve():
 
     res = xxe(api_key, f"{internal_url}/flag")
     raw = res.get("vendor", "")
-    m = re.search(r"(CTF\{[^}]*\}|ctf4?\{[^}]*\})", raw)
+    m = re.search(r"(CTF4\{[^}]*\}|ctf4?\{[^}]*\})", raw)
     return m.group(1) if m else raw.strip()
 
 

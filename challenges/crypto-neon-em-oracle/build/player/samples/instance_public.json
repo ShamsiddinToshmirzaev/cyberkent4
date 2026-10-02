@@ -1,0 +1,6 @@
+{
+  "id": "C05-neon-em-oracle",
+  "gateway_host": "127.0.0.1",
+  "gateway_port": 9050,
+  "note": "GET /info for the trace length, the tag scheme, and the forbidden command."
+}

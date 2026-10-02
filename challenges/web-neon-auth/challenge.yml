@@ -2,13 +2,13 @@ name: "Neon Core Auth"
 slug: web-neon-auth
 category: web
 difficulty: medium
-author: o.ruzimatov@csec.uz
+author: Falcon
 host_port: 10007
 internal_ports: []
 image: ctf/web-neon-auth:1.0.0
 stateful: true
 healthcheck_url: "http://TARGET/"
-flag_format: "CTF{...}"
+flag_format: "CTF4{...}"
 solution:
   cmd: "python3 solution/smoke_test.py"
 reset:

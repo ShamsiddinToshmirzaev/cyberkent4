@@ -1,0 +1,16 @@
+{
+  "id": "C03-minerva-fm",
+  "pubkey": {
+    "x": "9d2c1213b77db4d7a79142d9e62d79ceac8c7a1a63bc967343d7e7f252fdc150",
+    "y": "7ca5ebbea6da9e9b18f11dcfc38fa2fc8106a12ff343fa00381f44e6f1a15519"
+  },
+  "curve": {
+    "name": "P-256",
+    "n": "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551"
+  },
+  "target_manifest": "{\"station\":\"13.37\",\"role\":\"ghost-dj\"}",
+  "manifest_hint": "Signable track manifests look like {\"station\":\"88.5\",\"title\":\"...\",\"mix\":\"...\"}. The signer refuses anything containing the privileged tokens.",
+  "gateway_host": "127.0.0.1",
+  "gateway_port": 9030,
+  "query_budget": 2000000
+}

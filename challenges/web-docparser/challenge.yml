@@ -2,13 +2,13 @@ name: "DocParser / InvoiceFlow"
 slug: web-docparser
 category: web
 difficulty: medium
-author: o.ruzimatov@csec.uz
+author: Shams
 host_port: 10003
 internal_ports: [7777]
 image: ctf/web-docparser:1.0.0
 stateful: false
 healthcheck_url: "http://TARGET/"
-flag_format: "CTF{...}"
+flag_format: "CTF4{...}"
 solution:
   cmd: "python3 solution/smoke_test.py"
 reset:

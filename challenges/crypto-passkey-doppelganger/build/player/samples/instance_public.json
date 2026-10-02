@@ -1,0 +1,6 @@
+{
+  "id": "C10-passkey-doppelganger",
+  "gateway_host": "127.0.0.1",
+  "gateway_port": 9100,
+  "note": "GET /info for the rpId, your registered credential, and the privileged profile."
+}

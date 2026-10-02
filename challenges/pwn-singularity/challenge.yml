@@ -1,0 +1,19 @@
+name: "Singularity"
+slug: pwn-singularity
+category: pwn
+difficulty: hard
+author: Giyosiddin
+host_port: 11007
+internal_ports: []
+image: ctf/pwn-singularity:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "UAF free-list poison arms the debug-exec facility; the seccomp denylist is arch-blind, so 32-bit int 0x80 open/read/write of the flag slips past it."
+
+hardening_note: "entrypoint starts as root to place a read-only root:0444 flag + self-heal watchdog, then setpriv-drops to uid 1000 for the vuln; requires cap_add [SETUID,SETGID] with cap_drop [ALL]."

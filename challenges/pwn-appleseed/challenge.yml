@@ -1,0 +1,21 @@
+name: "Appleseed"
+slug: pwn-appleseed
+category: pwn
+difficulty: hard
+author: Giyosiddin
+host_port: 11000
+internal_ports: []
+image: ctf/pwn-appleseed:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "glibc 2.35 tcache-poison + House of Apple 2: overwrite _IO_2_1_stdout_ so a flush runs system(), then drive a shell over the socket."
+
+hardening_note: "entrypoint starts as root to place a read-only root:0444 flag + self-heal watchdog, then setpriv-drops to uid 1000 for the vuln; requires cap_add [SETUID,SETGID] with cap_drop [ALL]."
+
+true_difficulty: "insane"   # spec enum caps at hard; real tier is insane

@@ -13,7 +13,7 @@ import time
 import requests
 
 TARGET = os.environ.get("TARGET", "http://127.0.0.1:10007").rstrip("/")
-FLAG_RE = re.compile(r"CTF\{[^}]+\}")
+FLAG_RE = re.compile(r"CTF4\{[^}]+\}")
 # The login query selects two columns (id, username), and its username/password sit on
 # SEPARATE lines. Injecting via `password` (the last value before LIMIT 1) lets a
 # single-line `-- -` comment close the query cleanly; the flag lands in the username column.

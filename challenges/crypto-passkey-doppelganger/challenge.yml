@@ -1,0 +1,17 @@
+name: "Passkey Doppelganger"
+slug: crypto-passkey-doppelganger
+category: crypto
+difficulty: hard
+author: Giyosiddin
+host_port: 12011
+internal_ports: []
+image: ctf/crypto-passkey-doppelganger:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "Difficulty tier (source): extreme. WebAuthn/passkey origin-subdomain privilege confusion in CBOR attestation; forge a credential valid for stages never issued. smoke_test is blocked: the solver in solution/ needs the per-instance private credential handout (my_credential) that the shared service does not expose over the network."

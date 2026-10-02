@@ -1,0 +1,19 @@
+name: "ColdCache"
+slug: pwn-coldcache
+category: pwn
+difficulty: medium
+author: Giyosiddin
+host_port: 11002
+internal_ports: []
+image: ctf/pwn-coldcache:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET:5000"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "UAF -> glibc 2.35 safe-linking tcache poison; overlap handler control block, overwrite callback with flag_reader, CALL -> flag."
+
+hardening_note: "entrypoint starts as root to place a read-only root:0444 flag + self-heal watchdog, then setpriv-drops to uid 1000 for the vuln; requires cap_add [SETUID,SETGID] with cap_drop [ALL]."

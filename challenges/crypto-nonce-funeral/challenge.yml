@@ -1,0 +1,17 @@
+name: "Nonce Funeral"
+slug: crypto-nonce-funeral
+category: crypto
+difficulty: hard
+author: Giyosiddin
+host_port: 12009
+internal_ports: []
+image: ctf/crypto-nonce-funeral:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "Difficulty tier (source): extreme. Progressively biased ECDSA nonces (HNP/LLL) as the signer 'reboots' shallower each round; recover the key and release the album."

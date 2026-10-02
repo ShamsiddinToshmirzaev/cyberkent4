@@ -9,10 +9,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHDIR="$ROOT/challenges"
 PORTS="$ROOT/ports.csv"
+TPLDIR="$ROOT/templates"
 
-# fleet-wide defaults (optional)
+# fleet-wide defaults (optional; override in .env.global)
 CTF_HOST="127.0.0.1"
 ADMIN_CIDR="10.0.0.0/24"
+HOST_MEM_MB="16000"     # host RAM budget for `ctfctl capacity`
+HOST_CPUS="8"           # host CPU budget for `ctfctl capacity`
 [ -f "$ROOT/.env.global" ] && . "$ROOT/.env.global"
 
 c_red=$'\033[0;31m'; c_grn=$'\033[0;32m'; c_yel=$'\033[1;33m'; c_cya=$'\033[0;36m'; c_off=$'\033[0m'
@@ -22,7 +25,7 @@ warn(){ echo "${c_yel}[!]${c_off} $*"; }
 err(){  echo "${c_red}[x]${c_off} $*" >&2; }
 die(){  err "$*"; exit 1; }
 
-# --- compose wrapper (supports both `docker compose` and legacy `docker-compose`) ---
+# --- compose wrapper ---
 compose(){
   local slug="$1"; shift
   local dir="$CHDIR/$slug"
@@ -45,36 +48,119 @@ targets(){
   if [ "$#" -eq 0 ] || [ "${1:-}" = "all" ]; then all_slugs; else printf '%s\n' "$@"; fi
 }
 
-require_flags(){ # warn (don't fail) if a challenge has no flags.env yet
-  local slug="$1"
-  if [ ! -f "$CHDIR/$slug/flags.env" ]; then
-    warn "$slug: no flags.env (copy flags.env.example -> flags.env and set FLAG=...)"
+# --- challenge.yml scalar readers (flat YAML the scaffolder emits; grep/sed, no deps) ---
+yml_scalar(){ # yml_scalar <slug> <key>  -> top-level scalar value (quotes/comments stripped)
+  local f="$CHDIR/$1/challenge.yml"; [ -f "$f" ] || return 0
+  { grep -E "^$2:" "$f" 2>/dev/null | head -1 \
+    | sed -E "s/^$2:[[:space:]]*//; s/[[:space:]]+#.*$//; s/^\"//; s/\"$//; s/^'//; s/'$//"; } || true
+}
+yml_reset_policy(){ # nested reset:\n  policy: <value>
+  awk '/^reset:/{f=1;next} f&&/policy:/{l=$0; sub(/.*policy:[ \t]*/,"",l); sub(/[ \t]*#.*/,"",l); gsub(/[ \t]/,"",l); print l; exit}' \
+    "$CHDIR/$1/challenge.yml" 2>/dev/null || true
+}
+slug_category(){ echo "${1%%-*}"; }
+
+# --- port band per category ---
+port_base(){ case "$1" in web) echo 10000;; pwn) echo 11000;; crypto) echo 12000;; *) echo 13000;; esac; }
+port_ceil(){ case "$1" in web) echo 10999;; pwn) echo 11999;; crypto) echo 12999;; *) echo 13999;; esac; }
+next_port(){ # first free host port in the category band
+  local cat="$1" base ceil used p
+  base="$(port_base "$cat")"; ceil="$(port_ceil "$cat")"
+  used="$(awk -F, -v b="$base" -v c="$ceil" 'NR>1 && $3>=b && $3<=c {print $3}' "$PORTS" 2>/dev/null | sort -n)"
+  p="$base"
+  while printf '%s\n' "$used" | grep -qx "$p"; do
+    p=$((p+1)); [ "$p" -gt "$ceil" ] && die "no free port left in $cat band ($base-$ceil)"
+  done
+  echo "$p"
+}
+
+# --- secret generators ---
+gen_flag(){ echo "CTF4{$(openssl rand -hex 16)}"; }
+gen_pw(){ openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24; }
+gen_dbenv(){ # gen_dbenv <db.env.example>  -> body with password-like non-empty values randomized
+  local ex="$1" k v
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      \#*|"") echo "$line";;
+      *=*)
+        k="${line%%=*}"; v="${line#*=}"
+        if printf '%s' "$k" | grep -qiE '(PASS|PASSWORD|PWD|SECRET)' && [ -n "$v" ]; then
+          echo "$k=$(gen_pw)"
+        else echo "$line"; fi;;
+      *) echo "$line";;
+    esac
+  done < "$ex"
+}
+one_secrets(){ # one_secrets <slug> <force 0|1>
+  local s="$1" force="${2:-0}" dir="$CHDIR/$1"
+  if [ -f "$dir/flags.env.example" ]; then
+    if [ ! -f "$dir/flags.env" ] || [ "$force" = 1 ]; then
+      printf 'FLAG=%s\n' "$(gen_flag)" > "$dir/flags.env"; ok "$s: wrote flags.env"
+    else info "$s: flags.env exists (use 'rotate' to replace)"; fi
+  fi
+  if [ -f "$dir/db.env.example" ]; then
+    if [ ! -f "$dir/db.env" ] || [ "$force" = 1 ]; then
+      gen_dbenv "$dir/db.env.example" > "$dir/db.env"; ok "$s: wrote db.env"
+    else info "$s: db.env exists (use 'rotate' to replace)"; fi
   fi
 }
 
-cmd_up(){
-  for s in $(targets "$@"); do
-    require_flags "$s"
-    info "up $s"; compose "$s" up -d --build && ok "$s up"
-  done
+require_flags(){ # warn (don't fail) if a challenge has no flags.env yet
+  local slug="$1"
+  if [ ! -f "$CHDIR/$slug/flags.env" ]; then
+    warn "$slug: no flags.env (run 'ctfctl secrets $slug' or copy flags.env.example)"
+  fi
 }
 
-cmd_down(){
-  for s in $(targets "$@"); do
-    info "down $s"; compose "$s" down && ok "$s down"
+# =============================== lifecycle (with optional -j) ===============================
+JOBS=1; REST=()
+parse_jobs(){ # strips -j N / -jN from args, sets JOBS + REST
+  JOBS=1; REST=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -j) JOBS="${2:-1}"; shift 2;;
+      -j*) JOBS="${1#-j}"; shift;;
+      *) REST+=("$1"); shift;;
+    esac
   done
 }
-
-cmd_reset(){
-  # destructive: wipes this task's volumes then re-provisions. Scoped to one project.
-  for s in $(targets "$@"); do
-    info "reset $s (down -v + up)"; compose "$s" down -v; compose "$s" up -d --build && ok "$s reset"
+run_pool(){ # run_pool <fn> <targets...>  -> honors $JOBS
+  local fn="$1"; shift
+  local ts=("$@")
+  if [ "$JOBS" -le 1 ]; then
+    local rc=0; for s in "${ts[@]}"; do "$fn" "$s" || rc=1; done; return $rc
+  fi
+  local tmp; tmp="$(mktemp -d)"; local active=0
+  for s in "${ts[@]}"; do
+    ( "$fn" "$s" >"$tmp/$s.log" 2>&1; echo $? >"$tmp/$s.rc" ) &
+    active=$((active+1)); if [ "$active" -ge "$JOBS" ]; then wait -n 2>/dev/null || true; active=$((active-1)); fi
   done
+  wait
+  local rc=0 r
+  for s in "${ts[@]}"; do
+    [ -f "$tmp/$s.log" ] && cat "$tmp/$s.log"
+    r="$(cat "$tmp/$s.rc" 2>/dev/null || echo 1)"; [ "$r" = 0 ] || rc=1
+  done
+  rm -rf "$tmp"; return $rc
 }
 
-cmd_build(){
-  for s in $(targets "$@"); do info "build $s"; compose "$s" build && ok "$s built"; done
+one_build(){ local s="$1"; info "build $s"; if compose "$s" build; then ok "$s built"; else err "$s build FAILED"; return 1; fi; }
+one_up(){ local s="$1"; require_flags "$s"; info "up $s"; if compose "$s" up -d --build; then ok "$s up"; else err "$s up FAILED"; return 1; fi; }
+one_down(){ local s="$1"; info "down $s"; compose "$s" down && ok "$s down"; }
+one_reset(){ local s="$1"; info "reset $s (down -v + up)"; compose "$s" down -v; if compose "$s" up -d --build; then ok "$s reset"; else err "$s reset FAILED"; return 1; fi; }
+one_test(){
+  local s="$1" dir="$CHDIR/$s" p; p="$(port_of "$s")"
+  if [ ! -f "$dir/solution/smoke_test.py" ]; then warn "$s: no smoke_test.py, skipping"; return 0; fi
+  info "test $s -> http://$CTF_HOST:$p"
+  if TARGET="http://$CTF_HOST:$p" FLAGS_ENV="$dir/flags.env" timeout 120 python3 "$dir/solution/smoke_test.py"; then
+    ok "PASS $s"; else err "FAIL $s"; return 1; fi
 }
+
+cmd_up(){    parse_jobs "$@"; run_pool one_up    $(targets "${REST[@]}"); }
+cmd_down(){  parse_jobs "$@"; run_pool one_down  $(targets "${REST[@]}"); }
+cmd_reset(){ parse_jobs "$@"; run_pool one_reset $(targets "${REST[@]}"); }
+cmd_build(){ parse_jobs "$@"; run_pool one_build $(targets "${REST[@]}"); }
+cmd_test(){  parse_jobs "$@"; run_pool one_test  $(targets "${REST[@]}"); }
 
 cmd_status(){
   printf "%-22s %-7s %-10s %s\n" "SLUG" "PORT" "PORTCHK" "CONTAINERS"
@@ -89,23 +175,8 @@ cmd_status(){
   done
 }
 
-cmd_test(){
-  local rc=0
-  for s in $(targets "$@"); do
-    local dir="$CHDIR/$s" p; p="$(port_of "$s")"
-    if [ ! -f "$dir/solution/smoke_test.py" ]; then warn "$s: no smoke_test.py, skipping"; continue; fi
-    info "test $s -> http://$CTF_HOST:$p"
-    if TARGET="http://$CTF_HOST:$p" FLAGS_ENV="$dir/flags.env" timeout 120 python3 "$dir/solution/smoke_test.py"; then
-      ok "PASS $s"
-    else
-      err "FAIL $s"; rc=1
-    fi
-  done
-  return $rc
-}
-
+# =============================== validation ===============================
 cmd_ports(){
-  # validate: unique host ports, and each .env HOST_PORT matches the registry
   local bad=0
   local dups; dups="$(awk -F, 'NR>1 && $3 {print $3}' "$PORTS" | sort | uniq -d)"
   if [ -n "$dups" ]; then err "duplicate host ports in ports.csv: $dups"; bad=1; fi
@@ -116,11 +187,289 @@ cmd_ports(){
       if [ -n "$envp" ] && [ "$envp" != "$reg" ]; then
         err "$s: .env HOST_PORT=$envp != ports.csv $reg"; bad=1
       fi
-    else
-      warn "$s: no .env"
-    fi
+    else warn "$s: no .env"; fi
   done
   [ "$bad" -eq 0 ] && ok "ports OK (no dupes, no drift)" || return 1
+}
+
+# --- conformance linter ---
+LINT_ERR=0; LINT_WARN=0
+_le(){ err "  $1"; LINT_ERR=$((LINT_ERR+1)); }
+_lw(){ warn "  $1"; LINT_WARN=$((LINT_WARN+1)); }
+lint_one(){ # lint_one <slug> [--pre-register]
+  local s="$1" pre="${2:-}" dir="$CHDIR/$1"
+  local yml="$dir/challenge.yml" cmp="$dir/docker-compose.yml"
+  info "lint $s"
+  [ -d "$dir" ] || { _le "no such folder"; return 1; }
+
+  # required files
+  local f
+  for f in challenge.yml docker-compose.yml .env flags.env.example build/Dockerfile solution/smoke_test.py; do
+    [ -f "$dir/$f" ] || _le "missing $f"
+  done
+  [ -f "$yml" ] || { echo; return 1; }
+
+  # challenge.yml keys + values
+  local name slug cat img diff stateful fmt hc hp pp hex rp
+  name="$(yml_scalar "$s" name)";        [ -n "$name" ] || _le "challenge.yml: name missing"
+  slug="$(yml_scalar "$s" slug)";        [ "$slug" = "$s" ] || _le "challenge.yml slug='$slug' != folder '$s'"
+  cat="$(yml_scalar "$s" category)"
+  echo "$cat" | grep -qE '^(web|pwn|crypto|forensics|rev|misc)$' || _le "category '$cat' invalid"
+  img="$(yml_scalar "$s" image)";        [ -n "$img" ] || _le "challenge.yml: image missing"
+  diff="$(yml_scalar "$s" difficulty)";  echo "$diff" | grep -qE '^(easy|medium|hard)$' || _le "difficulty '$diff' invalid"
+  stateful="$(yml_scalar "$s" stateful)";echo "$stateful" | grep -qE '^(true|false)$' || _le "stateful must be true/false"
+  fmt="$(yml_scalar "$s" flag_format)";  [ "$fmt" = 'CTF4{...}' ] || _le "flag_format must be CTF4{...} (got '$fmt')"
+  hc="$(yml_scalar "$s" healthcheck_url)"; echo "$hc" | grep -qE '^http://TARGET' || _lw "healthcheck_url should start http://TARGET"
+  hp="$(yml_scalar "$s" host_port)"; pp="$(yml_scalar "$s" proposed_port)"
+  if [ -n "$hp" ] && [ -n "$pp" ]; then _le "declare only one of host_port/proposed_port"; fi
+  if [ -z "$hp" ] && [ -z "$pp" ]; then _le "must declare host_port (or proposed_port pre-register)"; fi
+  rp="$(yml_reset_policy "$s")"; echo "$rp" | grep -qE '^(none|scheduled)$' || _le "reset.policy '$rp' invalid"
+  hex="$(yml_scalar "$s" hardening_exceptions)"
+  case "$hex" in
+    "[]"|'["read_only", "user", "cap_drop"]'|'["read_only","user","cap_drop"]') : ;;
+    *) _lw "hardening_exceptions '$hex' is non-standard" ;;
+  esac
+  # coupling: stateful <-> reset scheduled
+  if [ "$stateful" = true ] && [ "$rp" != scheduled ]; then _le "stateful:true requires reset.policy: scheduled"; fi
+  if [ "$stateful" = false ] && [ "$rp" != none ]; then _le "stateful:false requires reset.policy: none"; fi
+
+  # compose invariants
+  if [ -f "$cmp" ]; then
+    grep -q 'name: ${CTF_SLUG}' "$cmp" || _le "compose: missing 'name: \${CTF_SLUG}'"
+    grep -q 'no-new-privileges:true' "$cmp" || _le "compose: missing no-new-privileges"
+    grep -q 'restart: unless-stopped' "$cmp" || _le "compose: missing restart: unless-stopped"
+    grep -q 'ctf.task:' "$cmp" || _le "compose: missing ctf.task label"
+    grep -q 'ctf.category:' "$cmp" || _le "compose: missing ctf.category label"
+    grep -q 'ctf.port:' "$cmp" || _le "compose: missing ctf.port label"
+    grep -q 'healthcheck:' "$cmp" || _le "compose: missing healthcheck"
+    grep -qE 'limits:' "$cmp" || _le "compose: missing deploy.resources.limits"
+    grep -qE '"\$\{HOST_PORT\}:' "$cmp" || _le "compose: published port must be \"\${HOST_PORT}:...\""
+    grep -q 'json-file' "$cmp" || _lw "compose: no json-file log rotation"
+    # hardening tier vs exceptions
+    if [ "$hex" = "[]" ]; then
+      grep -q 'read_only: true' "$cmp" || _le "hardening_exceptions:[] but compose lacks read_only:true"
+      grep -q 'cap_drop:' "$cmp" || _le "hardening_exceptions:[] but compose lacks cap_drop"
+    else
+      grep -q 'read_only: true' "$cmp" && _lw "declares hardening_exceptions yet sets read_only:true"
+    fi
+  fi
+
+  # DB challenges: db.env.example must exist
+  if grep -rqs 'db.env' "$cmp" 2>/dev/null || [ -f "$dir/db.env.example" ]; then
+    [ -f "$dir/db.env.example" ] || _le "uses db.env but no db.env.example committed"
+  fi
+
+  # port/image consistency (registered mode only)
+  if [ "$pre" != "--pre-register" ]; then
+    local reg envp envi
+    reg="$(port_of "$s")"
+    [ -n "$reg" ] || _le "not in ports.csv (run 'ctfctl add $s')"
+    [ -n "$hp" ] && [ -n "$reg" ] && [ "$hp" != "$reg" ] && _le "challenge.yml host_port=$hp != ports.csv $reg"
+    if [ -f "$dir/.env" ]; then
+      envp="$(grep -E '^HOST_PORT=' "$dir/.env" | cut -d= -f2 | tr -d '[:space:]' || true)"
+      [ -n "$reg" ] && [ -n "$envp" ] && [ "$envp" != "$reg" ] && _le ".env HOST_PORT=$envp != ports.csv $reg"
+      envi="$(grep -E '^IMAGE=' "$dir/.env" | cut -d= -f2 | tr -d '[:space:]' || true)"
+      [ -n "$img" ] && [ -n "$envi" ] && [ "$img" != "$envi" ] && _le "challenge.yml image=$img != .env IMAGE=$envi"
+      local regi; regi="$(field "$s" 5)"
+      [ -n "$regi" ] && [ -n "$img" ] && [ "$img" != "$regi" ] && _le "challenge.yml image=$img != ports.csv image=$regi"
+    fi
+  fi
+
+  # secrets hygiene
+  local hit
+  hit="$(grep -rIlE 'CTF4?\{' "$dir/build" 2>/dev/null || true)"
+  if [ -n "$hit" ]; then
+    # allow known non-secret fallbacks/placeholders
+    local realhit
+    # CTF4{" (brace+quote) is flag-building code (concat/startswith/env-fallback), never a literal secret
+    realhit="$(grep -rInE 'CTF4?\{' "$dir/build" 2>/dev/null | grep -vE 'CTF4?\{(REPLACE_ME|local_dev_flag|local_test_flag|\.\.\.)\}' | grep -vE 'CTF4?\{"' || true)"
+    if [ -n "$realhit" ]; then
+      if [ "$(yml_scalar "$s" decoy_flags)" = "true" ]; then
+        _lw "decoy_flags declared: $(echo "$realhit" | wc -l | tr -d ' ') literal CTF4{ line(s) in build/ allowed"
+      else
+        _le "possible baked flag in build/: $(echo "$realhit" | head -1)"
+      fi
+    fi
+  fi
+  for sf in flags.env db.env; do
+    if [ -f "$dir/$sf" ]; then
+      git -C "$ROOT" check-ignore -q "$dir/$sf" 2>/dev/null || _le "$sf exists but is NOT git-ignored"
+      git -C "$ROOT" ls-files --error-unmatch "$dir/$sf" >/dev/null 2>&1 && _le "$sf is tracked by git (must not be)"
+    fi
+  done
+  git -C "$ROOT" ls-files "$dir" 2>/dev/null | grep -qE '\.orig$|__pycache__' && _lw "stray tracked .orig/__pycache__ under $s"
+
+  # smoke test contract
+  if [ -f "$dir/solution/smoke_test.py" ]; then
+    grep -q 'TARGET' "$dir/solution/smoke_test.py" || _le "smoke_test.py: no TARGET"
+    grep -q 'sys.exit(' "$dir/solution/smoke_test.py" || _le "smoke_test.py: no sys.exit(main())"
+    grep -q 'FLAGS_ENV' "$dir/solution/smoke_test.py" || _lw "smoke_test.py: no FLAGS_ENV flag comparison (behavioral test?)"
+  fi
+}
+cmd_lint(){
+  local rc=0
+  for s in $(targets "$@"); do
+    LINT_ERR=0; LINT_WARN=0
+    lint_one "$s" || true
+    if [ "$LINT_ERR" -eq 0 ]; then ok "$s lint OK ($LINT_WARN warn)"; else err "$s lint FAILED ($LINT_ERR err, $LINT_WARN warn)"; rc=1; fi
+  done
+  return $rc
+}
+
+# =============================== scaffolding & registration ===============================
+scaffold_substitute(){ # scaffold_substitute <dir> <slug> <cat> <port> <image> <difficulty>
+  local d="$1" slug="$2" cat="$3" port="$4" image="$5" diff="$6" f
+  while IFS= read -r f; do
+    sed -i \
+      -e "s|__SLUG__|$slug|g" -e "s|__CATEGORY__|$cat|g" \
+      -e "s|__PORT__|$port|g" -e "s|__IMAGE__|$image|g" \
+      -e "s|__DIFFICULTY__|$diff|g" "$f"
+  done < <(find "$d" -type f)
+}
+cmd_new(){
+  local slug="" arch="" diff="medium" stateful=0
+  while [ "$#" -gt 0 ]; do case "$1" in
+    --archetype) arch="${2:-}"; shift 2;;
+    --difficulty) diff="${2:-}"; shift 2;;
+    --stateful) stateful=1; shift;;
+    -*) die "unknown option: $1";;
+    *) slug="$1"; shift;;
+  esac; done
+  [ -n "$slug" ] || die "usage: ctfctl new <slug> [--archetype python|lamp-php|lamp-db] [--difficulty D] [--stateful]"
+  echo "$slug" | grep -qE '^(web|pwn|crypto|forensics|rev|misc)-[a-z0-9]+(-[a-z0-9]+)*$' \
+    || die "slug must be <category>-<name>, kebab-case (e.g. web-foo)"
+  [ -d "$CHDIR/$slug" ] && die "$slug already exists on disk"
+  all_slugs | grep -qx "$slug" && die "$slug already in ports.csv"
+  local cat; cat="$(slug_category "$slug")"
+  [ -n "$arch" ] || { [ "$stateful" = 1 ] && arch="lamp-db" || arch="python"; }
+  local tpl="$TPLDIR/$arch"
+  [ -d "$tpl" ] || die "unknown archetype '$arch' (have: $(ls "$TPLDIR" 2>/dev/null | paste -sd, -))"
+  local port image; port="$(next_port "$cat")"; image="ctf/$slug:1.0.0"
+  info "new $slug: archetype=$arch category=$cat port=$port"
+  cp -r "$tpl" "$CHDIR/$slug"
+  scaffold_substitute "$CHDIR/$slug" "$slug" "$cat" "$port" "$image" "$diff"
+  printf '%s,%s,%s,,%s,%s,%s\n' "$slug" "$cat" "$port" "$image" "$(yml_scalar "$slug" author)" "scaffolded ($arch)" >> "$PORTS"
+  one_secrets "$slug" 0
+  ok "$slug scaffolded at challenges/$slug (port $port). Now edit build/ + solution/smoke_test.py."
+  LINT_ERR=0; LINT_WARN=0; lint_one "$slug" || true
+  [ "$LINT_ERR" -eq 0 ] && ok "$slug lint OK" || warn "$slug: $LINT_ERR lint error(s) — expected until you fill build/ + smoke test"
+}
+reconcile_port(){ # reconcile_port <slug> <port>: set challenge.yml host_port + .env HOST_PORT
+  local s="$1" port="$2" yml="$CHDIR/$1/challenge.yml" env="$CHDIR/$1/.env"
+  if grep -qE '^proposed_port:' "$yml"; then
+    sed -i -E "s|^proposed_port:.*|host_port: $port|" "$yml"
+  elif grep -qE '^host_port:' "$yml"; then
+    sed -i -E "s|^host_port:.*|host_port: $port|" "$yml"
+  else
+    sed -i -E "/^category:/a host_port: $port" "$yml"
+  fi
+  if [ -f "$env" ] && grep -qE '^HOST_PORT=' "$env"; then
+    sed -i -E "s|^HOST_PORT=.*|HOST_PORT=$port|" "$env"
+  else
+    printf 'HOST_PORT=%s\n' "$port" >> "$env"
+  fi
+}
+cmd_add(){ # register a conforming folder already dropped into challenges/<slug>/
+  local slug="${1:-}"; [ -n "$slug" ] || die "usage: ctfctl add <slug>"
+  local dir="$CHDIR/$slug"; [ -d "$dir" ] || die "no folder challenges/$slug (drop the submission there first)"
+  all_slugs | grep -qx "$slug" && die "$slug already registered in ports.csv"
+  LINT_ERR=0; LINT_WARN=0
+  lint_one "$slug" --pre-register || true
+  [ "$LINT_ERR" -eq 0 ] || die "$slug failed pre-register lint ($LINT_ERR errors) — fix before adding"
+  local cat img port
+  cat="$(yml_scalar "$slug" category)"; [ -n "$cat" ] || cat="$(slug_category "$slug")"
+  img="$(yml_scalar "$slug" image)"; [ -n "$img" ] || img="ctf/$slug:1.0.0"
+  port="$(next_port "$cat")"
+  info "add $slug: category=$cat port=$port image=$img"
+  reconcile_port "$slug" "$port"
+  # keep .env IMAGE consistent if present
+  [ -f "$dir/.env" ] && grep -qE '^IMAGE=' "$dir/.env" && sed -i -E "s|^IMAGE=.*|IMAGE=$img|" "$dir/.env"
+  printf '%s,%s,%s,,%s,%s,%s\n' "$slug" "$cat" "$port" "$img" "$(yml_scalar "$slug" author)" "$(yml_scalar "$slug" notes | cut -c1-60)" >> "$PORTS"
+  one_secrets "$slug" 0
+  ok "$slug registered on port $port"
+  cmd_lint "$slug"
+}
+
+# =============================== secrets ===============================
+cmd_secrets(){ for s in $(targets "$@"); do one_secrets "$s" 0; done; }
+cmd_rotate(){
+  warn "rotating flags + DB passwords for: $(targets "$@" | paste -sd' ' -)"
+  for s in $(targets "$@"); do one_secrets "$s" 1; done
+  ok "rotation done — 'ctfctl reset <stateful>' (or up) to apply new DB passwords"
+}
+
+# =============================== generated fleet artifacts ===============================
+cmd_gencron(){
+  local out="$ROOT/ops/reset.cron"
+  local stateful=(); local s
+  for s in $(all_slugs); do [ "$(yml_reset_policy "$s")" = scheduled ] && stateful+=("$s"); done
+  {
+    echo "# CTF stateful-task auto-reset. GENERATED by 'ctfctl gen-cron' — do not hand-edit."
+    echo "# Shared instances get trashed by players, so DB-backed tasks are wiped + re-provisioned"
+    echo "# on a schedule. Stateless tasks (restart: unless-stopped) are not listed."
+    echo "# Install:  crontab -u ctf ops/reset.cron   (adjust CTF path)"
+    echo
+    echo "CTF=/opt/ctf/ctf-2026"
+    echo
+    local n=${#stateful[@]} i=0 off
+    for s in "${stateful[@]}"; do
+      if [ "$n" -gt 0 ]; then off=$(( (i*30/n) % 30 )); else off=0; fi
+      printf '%d,%d * * * *  cd $CTF && ./ctfctl reset %-20s >> /var/log/ctf/reset.log 2>&1\n' \
+        "$off" "$(( (off+30)%60 ))" "$s"
+      i=$((i+1))
+    done
+    echo
+    echo "# Disk safety: prune dangling images/build cache older than a day, off-peak."
+    echo '30 4 * * *     docker system prune -f --filter until=24h >> /var/log/ctf/prune.log 2>&1'
+  } > "$out"
+  ok "wrote $out (${#stateful[@]} stateful task(s))"
+}
+cmd_scoreboard(){
+  printf "slug,category,endpoint,flag\n"
+  for s in $(all_slugs); do
+    local cat p flag; cat="$(field "$s" 2)"; p="$(port_of "$s")"
+    flag="$(grep -E '^FLAG=' "$CHDIR/$s/flags.env" 2>/dev/null | head -1 | cut -d= -f2- || echo '<unset>')"
+    printf "%s,%s,http://%s:%s,%s\n" "$s" "$cat" "$CTF_HOST" "$p" "${flag:-<unset>}"
+  done
+}
+cmd_index(){ # fleet table from challenge.yml; --json for machine form
+  if [ "${1:-}" = "--json" ]; then
+    printf '['
+    local first=1 s
+    for s in $(all_slugs); do
+      [ "$first" = 1 ] || printf ','; first=0
+      printf '{"slug":"%s","port":"%s","category":"%s","difficulty":"%s","stateful":"%s","author":"%s","name":"%s"}' \
+        "$s" "$(port_of "$s")" "$(yml_scalar "$s" category)" "$(yml_scalar "$s" difficulty)" \
+        "$(yml_scalar "$s" stateful)" "$(yml_scalar "$s" author)" "$(yml_scalar "$s" name)"
+    done
+    printf ']\n'; return
+  fi
+  echo "| slug | port | category | difficulty | stateful | author | name |"
+  echo "|------|------|----------|------------|----------|--------|------|"
+  for s in $(all_slugs); do
+    printf "| %s | %s | %s | %s | %s | %s | %s |\n" \
+      "$s" "$(port_of "$s")" "$(yml_scalar "$s" category)" "$(yml_scalar "$s" difficulty)" \
+      "$(yml_scalar "$s" stateful)" "$(yml_scalar "$s" author)" "$(yml_scalar "$s" name)"
+  done
+}
+cmd_capacity(){
+  local tot_mem=0 tot_cpu=0 s
+  printf "%-22s %8s %6s\n" "SLUG" "MEM(MB)" "CPUS"
+  for s in $(all_slugs); do
+    local cmp="$CHDIR/$s/docker-compose.yml" m c
+    # sum every `memory: <N>M|<N>G` limit in the compose (M and G handled)
+    m="$(grep -oE 'memory:[[:space:]]*[0-9]+[MG]' "$cmp" 2>/dev/null | grep -oE '[0-9]+[MG]' \
+        | awk '{u=substr($0,length($0)); n=substr($0,1,length($0)-1); if(u=="G")n=n*1024; s+=n} END{print s+0}')"
+    c="$(grep -oE 'cpus:[[:space:]]*"?[0-9.]+' "$cmp" 2>/dev/null | grep -oE '[0-9.]+' | awk '{s+=$1} END{print s+0}')"
+    tot_mem=$((tot_mem + m)); tot_cpu="$(awk -v a="$tot_cpu" -v b="$c" 'BEGIN{printf "%.1f", a+b}')"
+    printf "%-22s %8s %6s\n" "$s" "$m" "$c"
+  done
+  echo "----"
+  printf "%-22s %8s %6s\n" "TOTAL(limits)" "$tot_mem" "$tot_cpu"
+  printf "%-22s %8s %6s\n" "HOST BUDGET" "$HOST_MEM_MB" "$HOST_CPUS"
+  awk -v t="$tot_mem" -v h="$HOST_MEM_MB" 'BEGIN{ if(t>h) exit 1 }' \
+    && ok "fleet memory limits fit host budget" \
+    || warn "fleet memory limits ($tot_mem MB) EXCEED host budget ($HOST_MEM_MB MB) — size up or split hosts"
 }
 
 cmd_firewall(){
@@ -135,29 +484,38 @@ cmd_firewall(){
   echo "ufw --force enable"
 }
 
-cmd_scoreboard(){
-  # manifest for the in-house scoreboard: slug, category, endpoint, flag
-  printf "slug,category,endpoint,flag\n"
-  for s in $(all_slugs); do
-    local cat p flag; cat="$(field "$s" 2)"; p="$(port_of "$s")"
-    flag="$(grep -E '^FLAG=' "$CHDIR/$s/flags.env" 2>/dev/null | head -1 | cut -d= -f2- || echo '<unset>')"
-    printf "%s,%s,http://%s:%s,%s\n" "$s" "$cat" "$CTF_HOST" "$p" "$flag"
-  done
+cmd_install_hooks(){
+  git -C "$ROOT" config core.hooksPath ops/hooks && ok "git hooks -> ops/hooks (pre-commit runs lint)"
 }
 
 usage(){
   cat <<EOF
 ctfctl — CTF fleet manager
 
-  ctfctl up      [slug|all]   build + start (detached)
-  ctfctl down    [slug|all]   stop, keep volumes
-  ctfctl reset   [slug|all]   DESTRUCTIVE: down -v + up (wipes this task's state, re-provisions)
-  ctfctl build   [slug|all]   build images only
-  ctfctl status  [slug|all]   containers + host-port reachability
-  ctfctl test    [slug|all]   run solution/smoke_test.py against the live host_port
-  ctfctl ports                validate ports.csv (no dupes, no drift vs .env)
-  ctfctl firewall             print ufw rules derived from ports.csv
-  ctfctl scoreboard           print slug,category,endpoint,flag manifest
+ Lifecycle (accept -j N for parallelism on build/up/reset/test):
+  ctfctl up      [slug|all] [-j N]  build + start (detached)
+  ctfctl down    [slug|all]         stop, keep volumes
+  ctfctl reset   [slug|all] [-j N]  DESTRUCTIVE: down -v + up (wipe + re-provision)
+  ctfctl build   [slug|all] [-j N]  build images only
+  ctfctl status  [slug|all]         containers + host-port reachability
+  ctfctl test    [slug|all] [-j N]  run solution/smoke_test.py against the live host_port
+
+ Authoring / intake:
+  ctfctl new <slug> [--archetype python|lamp-php|lamp-db] [--difficulty D] [--stateful]
+                                    scaffold a new challenge (auto-assigns a port)
+  ctfctl add <slug>                 register a conforming folder (assign port + ports.csv + secrets)
+  ctfctl lint    [slug|all]         static conformance check (the submission gate)
+  ctfctl secrets [slug|all]         create missing flags.env/db.env (random values)
+  ctfctl rotate  [slug|all]         regenerate flags.env/db.env (rotate secrets)
+
+ Fleet artifacts / ops:
+  ctfctl ports                      validate ports.csv (no dupes, no drift)
+  ctfctl gen-cron                   regenerate ops/reset.cron from challenge.yml reset.policy
+  ctfctl scoreboard                 print slug,category,endpoint,flag manifest
+  ctfctl index [--json]             fleet table from challenge.yml
+  ctfctl capacity                   sum resource limits vs host budget
+  ctfctl firewall                   print ufw rules from ports.csv
+  ctfctl install-hooks              point git at ops/hooks (pre-commit lint)
 
 Challenges: $(all_slugs | paste -sd' ' -)
 EOF
@@ -172,9 +530,18 @@ main(){
     build) cmd_build "$@";;
     status) cmd_status "$@";;
     test) cmd_test "$@";;
+    new) cmd_new "$@";;
+    add) cmd_add "$@";;
+    lint) cmd_lint "$@";;
+    secrets) cmd_secrets "$@";;
+    rotate) cmd_rotate "$@";;
     ports) cmd_ports "$@";;
-    firewall) cmd_firewall "$@";;
+    gen-cron) cmd_gencron "$@";;
     scoreboard) cmd_scoreboard "$@";;
+    index) cmd_index "$@";;
+    capacity) cmd_capacity "$@";;
+    firewall) cmd_firewall "$@";;
+    install-hooks) cmd_install_hooks "$@";;
     ""|-h|--help|help) usage;;
     *) err "unknown command: $cmd"; usage; exit 1;;
   esac

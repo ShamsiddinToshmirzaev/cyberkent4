@@ -1,0 +1,45 @@
+name: ${CTF_SLUG}
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# LAMP tier keeps default caps + writable rootfs (see challenge.yml hardening_exceptions).
+x-lamp-hardening: &lamp-hardening
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+
+services:
+  app:
+    <<: *lamp-hardening
+    build: ./build
+    image: ${IMAGE}
+    container_name: ctf_${CTF_SLUG}_app
+    ports:
+      - "${HOST_PORT}:80"
+    env_file:
+      - ./flags.env
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+          pids: 256
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://localhost/')===false?1:0);"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    labels:
+      ctf.task: "${CTF_SLUG}"
+      ctf.category: "${CTF_CATEGORY}"
+      ctf.port: "${HOST_PORT}"
+    networks: [frontend]
+
+networks:
+  frontend:
+    driver: bridge

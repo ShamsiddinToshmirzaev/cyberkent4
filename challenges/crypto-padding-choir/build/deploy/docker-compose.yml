@@ -1,0 +1,73 @@
+# Three services, two volumes. The whole point of the split: the gateway never
+# mounts the volume that holds the RSA private key or the instance file — it only
+# sees the reduced gateway.json. The appliance is on an internal network and is
+# never published; only the gateway's port is exposed.
+#
+#   docker compose -f deploy/docker-compose.yml up --build
+#
+# Each `up` re-runs init with a fresh random instance (per-instance randomisation).
+
+x-image: &image
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile
+
+services:
+  init:
+    <<: *image
+    user: root
+    command: ["sh","-c","python3 instance/generate.py --profile prod --out /key/instance.json --pem /key/appliance_key.pem --gateway-out /gw/gateway.json --player-dir /gw/samples && chmod -R a+rX /key /gw"]
+    volumes:
+      - key:/key
+      - gw:/gw
+
+  appliance:
+    <<: *image
+    command: python3 deploy/appliance_entry.py
+    environment:
+      INSTANCE: /key/instance.json
+      APPLIANCE_KEY: /key/appliance_key.pem
+      APPLIANCE_BIND: 0.0.0.0
+    volumes:
+      - key:/key:ro                       # <-- key ONLY here
+    depends_on:
+      init: { condition: service_completed_successfully }
+    networks: [internal]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./seccomp.json
+
+  gateway:
+    <<: *image
+    command: python3 src/gateway/gateway.py
+    environment:
+      INSTANCE: /gw/gateway.json          # <-- reduced config, no key
+      GATEWAY_BIND: 0.0.0.0
+      APPLIANCE_HOST: appliance
+    volumes:
+      - gw:/gw:ro
+    depends_on:
+      init: { condition: service_completed_successfully }
+      appliance: { condition: service_started }
+    ports:
+      - "9020:9020"                       # only the gateway is exposed
+    networks: [internal]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./seccomp.json
+    healthcheck:
+      test: ["CMD", "bash", "deploy/healthcheck.sh"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+networks:
+  internal: {}
+
+volumes:
+  key: {}
+  gw: {}

@@ -1,0 +1,20 @@
+name: "Honeypot"
+slug: misc-honeypot
+category: misc
+difficulty: hard
+author: Giyosiddin
+host_port: 13000
+internal_ports: []
+image: ctf/misc-honeypot:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+decoy_flags: true
+hardening_exceptions: []
+notes: "TCP oracle whose banner is stuffed with prompt-injection bait and decoy flags (all traps). The real flag is released only after passing an 8-round CHAINED blind-oracle handshake (recover f(x) over GF(65537) from probes each round; rounds chain so probes cannot be parallelised). Echoing any CTF4{...} back trips the guillotine."
+
+true_difficulty: "insane"   # spec enum caps at hard; real tier is insane

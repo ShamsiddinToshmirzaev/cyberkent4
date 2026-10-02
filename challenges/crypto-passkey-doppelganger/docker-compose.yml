@@ -1,0 +1,51 @@
+name: ${CTF_SLUG}
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-hardening: &hardening
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  restart: unless-stopped
+
+services:
+  app:
+    <<: *hardening
+    build: ./build
+    image: ${IMAGE}
+    container_name: ctf_${CTF_SLUG}_app
+    environment:
+      PORT: "5000"
+    ports:
+      - "${HOST_PORT}:5000"
+    env_file:
+      - ./flags.env
+    logging: *default-logging
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "1000:1000"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+          pids: 256
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; socket.create_connection(('127.0.0.1',5000),3).close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    labels:
+      ctf.task: "${CTF_SLUG}"
+      ctf.category: "${CTF_CATEGORY}"
+      ctf.port: "${HOST_PORT}"
+    networks: [frontend]
+
+networks:
+  frontend:
+    driver: bridge

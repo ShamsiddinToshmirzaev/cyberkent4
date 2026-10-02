@@ -8,7 +8,7 @@ internal_ports: []
 image: ctf/web-pinger:1.0.0
 stateful: false
 healthcheck_url: "http://TARGET/"
-flag_format: "CTF{...}"
+flag_format: "CTF4{...}"
 solution:
   cmd: "python3 solution/smoke_test.py"
 reset:

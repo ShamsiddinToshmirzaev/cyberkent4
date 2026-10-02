@@ -1,0 +1,17 @@
+name: "Padding Choir"
+slug: crypto-padding-choir
+category: crypto
+difficulty: hard
+author: Giyosiddin
+host_port: 12010
+internal_ports: [5001]
+image: ctf/crypto-padding-choir:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "Difficulty tier (source): extreme. Bleichenbacher PKCS#1v1.5 padding-oracle via response-latency side-channel against a DER-parsing C++ appliance; decrypt the archivist session to unlock the flag. Multi-service (init+appliance+gateway, C++ appliance built in-container). smoke_test is liveness-only: the solver in solution/ drives a raw-TCP protocol and a wall-clock timing side-channel with a per-instance public-key handout, not reconstructable from a shared canary."

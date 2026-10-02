@@ -1,0 +1,17 @@
+name: "Frostbite Coordinator"
+slug: crypto-frostbite-coordinator
+category: crypto
+difficulty: hard
+author: Giyosiddin
+host_port: 12006
+internal_ports: []
+image: ctf/crypto-frostbite-coordinator:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "Difficulty tier (source): final-boss. FROST threshold-signature nonce reuse: a signer re-signs with a stale nonce, enabling key recovery and a forged withdrawal."

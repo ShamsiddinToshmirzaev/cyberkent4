@@ -2,9 +2,9 @@
 set -e
 
 # Flag injected from flags.env at runtime. Fallback only for local dev.
-# (Avoid an inline ${FLAG:-CTF{...}} default: the nested brace mis-parses and appends a '}'.)
+# (Avoid an inline ${FLAG:-CTF4{...}} default: the nested brace mis-parses and appends a '}'.)
 FLAG="${FLAG:-}"
-[ -n "$FLAG" ] || FLAG='CTF{local_dev_flag}'
+[ -n "$FLAG" ] || FLAG='CTF4{local_dev_flag}'
 printf '%s\n' "$FLAG" > /tmp/flag.txt
 chmod 644 /tmp/flag.txt
 

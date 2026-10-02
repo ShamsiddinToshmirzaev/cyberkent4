@@ -1,0 +1,17 @@
+name: "Dilithium Drift"
+slug: crypto-dilithium-drift
+category: crypto
+difficulty: hard
+author: Giyosiddin
+host_port: 12003
+internal_ports: []
+image: ctf/crypto-dilithium-drift:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "Difficulty tier (source): final-boss. ML-DSA (Dilithium) leaking a slice of its secret signing nonce; lattice-recover the key and forge a signature."

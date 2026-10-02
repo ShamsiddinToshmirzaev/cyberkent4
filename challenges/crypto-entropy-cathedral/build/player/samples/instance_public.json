@@ -1,0 +1,6 @@
+{
+  "id": "C20-entropy-cathedral",
+  "gateway_host": "127.0.0.1",
+  "gateway_port": 9200,
+  "note": "GET /info for salt, current epoch, root commitments and the derivation; GET /telemetry for source-health per epoch."
+}

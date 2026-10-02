@@ -2,13 +2,13 @@ name: "JWTopia"
 slug: web-jwtopia
 category: web
 difficulty: medium
-author: o.ruzimatov@csec.uz
+author: Shams
 host_port: 10001
 internal_ports: []
 image: ctf/web-jwtopia:1.0.0
 stateful: false
 healthcheck_url: "http://TARGET/"
-flag_format: "CTF{...}"
+flag_format: "CTF4{...}"
 solution:
   cmd: "python3 solution/smoke_test.py"
 reset:

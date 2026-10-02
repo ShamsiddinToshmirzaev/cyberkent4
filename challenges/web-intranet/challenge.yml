@@ -2,13 +2,13 @@ name: "Intranet"
 slug: web-intranet
 category: web
 difficulty: medium
-author: o.ruzimatov@csec.uz
+author: Falcon
 host_port: 10006
 internal_ports: []
 image: ctf/web-intranet:1.0.0
 stateful: false
 healthcheck_url: "http://TARGET/"
-flag_format: "CTF{...}"
+flag_format: "CTF4{...}"
 solution:
   cmd: "python3 solution/smoke_test.py"
 reset:

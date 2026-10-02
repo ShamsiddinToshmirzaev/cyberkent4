@@ -1,0 +1,6 @@
+{
+  "id": "C18-rsa-museum",
+  "gateway_host": "127.0.0.1",
+  "gateway_port": 9060,
+  "note": "GET /info for the public modulus, the PSS scheme, and the forbidden artifact."
+}

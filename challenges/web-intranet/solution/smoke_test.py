@@ -15,7 +15,7 @@ import requests
 TARGET = os.environ.get("TARGET", "http://127.0.0.1:10006").rstrip("/")
 HIDDEN = "e7fa32cb05ba9ddc8d5f75bdf1694790"
 BYPASS = {"Cookie": "access=true", "X-Forwarded-For": "192.168.0.1"}
-FLAG_RE = re.compile(r"CTF\{[^}]+\}")
+FLAG_RE = re.compile(r"CTF4\{[^}]+\}")
 
 
 def expected_flag():

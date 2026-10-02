@@ -1,9 +1,34 @@
-slug,category,host_port,internal_ports,image,notes
-web-jwtopia,web,10001,,ctf/web-jwtopia:1.0.0,jwt alg-confusion + ssti
-web-silent-channel,web,10002,,ctf/web-silent-channel:1.0.0,wordpress 5.6 + mysql(internal) CVE-2021-29447
-web-docparser,web,10003,7777,ctf/web-docparser:1.0.0,7777 internal-only SSRF target (single container)
-web-token-ghost,web,10004,,ctf/web-token-ghost:1.0.0,jwt alg-confusion + ssti
-web-joombreaker,web,10005,,ctf/web-joombreaker:1.0.0,joomla 4.2.6 + mysql(internal) CVE-2023-23752
-web-intranet,web,10006,,ctf/web-intranet:1.0.0,hidden dir + XFF/cookie auth bypass -> LFI
-web-neon-auth,web,10007,,ctf/web-neon-auth:1.0.0,swp source leak -> sqli LOAD_FILE (mysql in-container)
-web-sql-console,web,10008,,ctf/web-sql-console:1.0.0,sqli waf-bypass -> hidden sql console -> LOAD_FILE (mysql in-container)
+slug,category,host_port,internal_ports,image,author,notes
+web-jwtopia,web,10001,,ctf/web-jwtopia:1.0.0,Shams,jwt alg-confusion + ssti
+web-silent-channel,web,10002,,ctf/web-silent-channel:1.0.0,Shams,wordpress 5.6 + mysql(internal) CVE-2021-29447
+web-docparser,web,10003,7777,ctf/web-docparser:1.0.0,Shams,7777 internal-only SSRF target (single container)
+web-token-ghost,web,10004,,ctf/web-token-ghost:1.0.0,Shams,jwt alg-confusion + ssti
+web-joombreaker,web,10005,,ctf/web-joombreaker-init:1.0.0,Shams,joomla 4.2.6 + mysql(internal) CVE-2023-23752
+web-intranet,web,10006,,ctf/web-intranet:1.0.0,Falcon,hidden dir + XFF/cookie auth bypass -> LFI
+web-neon-auth,web,10007,,ctf/web-neon-auth:1.0.0,Falcon,swp source leak -> sqli LOAD_FILE (mysql in-container)
+web-sql-console,web,10008,,ctf/web-sql-console:1.0.0,Falcon,sqli waf-bypass -> hidden sql console -> LOAD_FILE (mysql in-container)
+crypto-bls-orchestra,crypto,12000,,ctf/crypto-bls-orchestra:1.0.0,Giyosiddin,Difficulty tier (source): insane. BLS rogue-key aggregate-si
+crypto-cbor-time-machine,crypto,12001,,ctf/crypto-cbor-time-machine:1.0.0,Giyosiddin,Difficulty tier (source): extreme. CBOR duplicate-key parser
+crypto-chain-of-misfortune,crypto,12002,,ctf/crypto-chain-of-misfortune:1.0.0,Giyosiddin,Difficulty tier (source): insane. EIP-712 typed-data domain 
+crypto-dilithium-drift,crypto,12003,,ctf/crypto-dilithium-drift:1.0.0,Giyosiddin,Difficulty tier (source): final-boss. ML-DSA (Dilithium) lea
+crypto-entropy-cathedral,crypto,12004,,ctf/crypto-entropy-cathedral:1.0.0,Giyosiddin,Difficulty tier (source): final-boss. KMS entropy source wit
+crypto-fever-dream,crypto,12005,,ctf/crypto-fever-dream:1.0.0,Giyosiddin,Difficulty tier (source): final-boss. Thermal nonce-leak on 
+crypto-frostbite-coordinator,crypto,12006,,ctf/crypto-frostbite-coordinator:1.0.0,Giyosiddin,Difficulty tier (source): final-boss. FROST threshold-signat
+crypto-minerva-fm,crypto,12007,,ctf/crypto-minerva-fm:1.0.0,Giyosiddin,Difficulty tier (source): extreme. Minerva-style ECDSA short
+crypto-neon-em-oracle,crypto,12008,,ctf/crypto-neon-em-oracle:1.0.0,Giyosiddin,Difficulty tier (source): extreme. EM/power side-channel ora
+crypto-nonce-funeral,crypto,12009,,ctf/crypto-nonce-funeral:1.0.0,Giyosiddin,Difficulty tier (source): extreme. Progressively biased ECDS
+crypto-padding-choir,crypto,12010,,ctf/crypto-padding-choir:1.0.0,Giyosiddin,Difficulty tier (source): extreme. Bleichenbacher PKCS#1v1.5
+crypto-passkey-doppelganger,crypto,12011,,ctf/crypto-passkey-doppelganger:1.0.0,Giyosiddin,Difficulty tier (source): extreme. WebAuthn/passkey origin-s
+crypto-rsa-museum,crypto,12012,,ctf/crypto-rsa-museum:1.0.0,Giyosiddin,Difficulty tier (source): extreme. RSA-CRT + deterministic-P
+crypto-threshold-theatre,crypto,12013,,ctf/crypto-threshold-theatre:1.0.0,Giyosiddin,Difficulty tier (source): final-boss. Two-party threshold EC
+misc-honeypot,misc,13000,,ctf/misc-honeypot:1.0.0,Giyosiddin,TCP oracle whose banner is stuffed with prompt-injection bai
+pwn-appleseed,pwn,11000,,ctf/pwn-appleseed:1.0.0,Giyosiddin,glibc 2.35 tcache-poison + House of Apple 2: overwrite _IO_2
+pwn-blindfmt,pwn,11001,,ctf/pwn-blindfmt:1.0.0,Giyosiddin,Blind format string with NX+canary+PIE+Full RELRO. Leak cana
+pwn-coldcache,pwn,11002,,ctf/pwn-coldcache:1.0.0,Giyosiddin,UAF -> glibc 2.35 safe-linking tcache poison; overlap handle
+pwn-jitterbug,pwn,11003,,ctf/pwn-jitterbug:1.0.0,Giyosiddin,JIT emits attacker immediates as unblinded code; spray immed
+pwn-nine-lives,pwn,11004,,ctf/pwn-nine-lives:1.0.0,Giyosiddin,glibc 2.23 fastbin dup via a realloc trick; poison the __mal
+pwn-phantom,pwn,11005,,ctf/pwn-phantom:1.0.0,Giyosiddin,Session buffer overflow builds a sigreturn (SROP) frame -> e
+pwn-ring-master,pwn,11006,,ctf/pwn-ring-master:1.0.0,Giyosiddin,I/O race unlocks a ring buffer mid-operation -> use-after-fr
+pwn-singularity,pwn,11007,,ctf/pwn-singularity:1.0.0,Giyosiddin,UAF free-list poison arms the debug-exec facility; the secco
+pwn-verifier-ex,pwn,11008,,ctf/pwn-verifier-ex:1.0.0,Giyosiddin,Bytecode verifier state-merge flaw lets an unverified regist
+web-metaguard,web,10000,,ctf/web-metaguard:1.0.0,Giyosiddin,SSRF filter bypass to AWS IMDS via IPv6-mapped-IPv4 hex lite

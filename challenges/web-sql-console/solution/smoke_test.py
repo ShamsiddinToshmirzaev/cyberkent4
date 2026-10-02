@@ -14,7 +14,7 @@ import time
 import requests
 
 TARGET = os.environ.get("TARGET", "http://127.0.0.1:10008").rstrip("/")
-FLAG_RE = re.compile(r"CTF\{[^}]+\}")
+FLAG_RE = re.compile(r"CTF4\{[^}]+\}")
 ENDPOINT_RE = re.compile(r"([0-9a-f]{32}\.php)")
 
 

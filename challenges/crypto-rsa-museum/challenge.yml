@@ -1,0 +1,17 @@
+name: "RSA Museum"
+slug: crypto-rsa-museum
+category: crypto
+difficulty: hard
+author: Giyosiddin
+host_port: 12012
+internal_ports: []
+image: ctf/crypto-rsa-museum:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "Difficulty tier (source): extreme. RSA-CRT + deterministic-PSS Bellcore fault attack: glitch a single-branch CRT fault, gcd two signatures to factor N, forge the PSS cert."

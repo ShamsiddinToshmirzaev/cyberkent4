@@ -1,0 +1,17 @@
+name: "__SLUG__"
+slug: __SLUG__
+category: __CATEGORY__
+difficulty: __DIFFICULTY__
+author: you@csec.uz
+host_port: __PORT__
+internal_ports: []
+image: __IMAGE__
+stateful: false
+healthcheck_url: "http://TARGET/"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "REPLACE: one-line description of the vuln and intended solve path."

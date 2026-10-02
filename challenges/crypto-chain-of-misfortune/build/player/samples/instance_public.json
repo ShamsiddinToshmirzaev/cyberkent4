@@ -1,0 +1,40 @@
+{
+  "id": "C16-chain-of-misfortune",
+  "signer": {
+    "x": "975cbe59f2939377ef4053bed6e2b9d64483fe5418437ffdff3c63261785152d",
+    "y": "34301a98a1193362ca0ae101264d1b0891e2a72d5d0ddd0953defefdac751c04",
+    "address": "8b05007855175544acc5447647a6a4e1bf80170a"
+  },
+  "domain": {
+    "name": "NovaFest Tickets",
+    "version": "1",
+    "verifying_contract": "3483f9428a3ed7806a31eea9dc4af2c835c62c79"
+  },
+  "chains": {
+    "mainstage": {
+      "chain_id": 8899,
+      "name": "MainStage"
+    },
+    "teststage": {
+      "chain_id": 11155111,
+      "name": "TestStage"
+    }
+  },
+  "curve": {
+    "name": "P-256",
+    "n": "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551"
+  },
+  "types": {
+    "legacy_domain": "EIP712Domain(string name,string version,address verifyingContract)",
+    "modern_domain": "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)",
+    "ticket": "Ticket(uint256 ticketId,address holder,string action,uint256 tier)"
+  },
+  "params": {
+    "free_budget": 3,
+    "mint_threshold": 5,
+    "credit_per_ticket": 1,
+    "port": 9160
+  },
+  "gateway_host": "127.0.0.1",
+  "gateway_port": 9160
+}

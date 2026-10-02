@@ -1,0 +1,17 @@
+name: "Neon EM Oracle"
+slug: crypto-neon-em-oracle
+category: crypto
+difficulty: hard
+author: Giyosiddin
+host_port: 12008
+internal_ports: []
+image: ctf/crypto-neon-em-oracle:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "Difficulty tier (source): extreme. EM/power side-channel oracle over an AES token MAC; recover key material from leaked traces and mint the forbidden token."

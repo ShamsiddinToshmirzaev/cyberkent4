@@ -1,0 +1,18 @@
+name: "MetaGuard"
+slug: web-metaguard
+category: web
+difficulty: hard
+author: Giyosiddin
+host_port: 10000
+internal_ports: []
+image: ctf/web-metaguard:1.0.0
+stateful: false
+healthcheck_url: "http://TARGET/"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+decoy_flags: true
+hardening_exceptions: []
+notes: "SSRF filter bypass to AWS IMDS via IPv6-mapped-IPv4 hex literal; steal creds, AWS4-sign the admin flag route."

@@ -2,13 +2,13 @@ name: "SQL Console"
 slug: web-sql-console
 category: web
 difficulty: hard
-author: o.ruzimatov@csec.uz
+author: Falcon
 host_port: 10008
 internal_ports: []
 image: ctf/web-sql-console:1.0.0
 stateful: true
 healthcheck_url: "http://TARGET/login.php"
-flag_format: "CTF{...}"
+flag_format: "CTF4{...}"
 solution:
   cmd: "python3 solution/smoke_test.py"
 reset:

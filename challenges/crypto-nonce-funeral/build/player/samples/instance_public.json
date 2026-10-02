@@ -1,0 +1,6 @@
+{
+  "id": "C06-nonce-funeral",
+  "gateway_host": "127.0.0.1",
+  "gateway_port": 9060,
+  "note": "GET /info for the public key, the unreleasable target, and maintenance behavior."
+}

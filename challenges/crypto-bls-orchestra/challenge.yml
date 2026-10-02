@@ -1,0 +1,17 @@
+name: "BLS Orchestra"
+slug: crypto-bls-orchestra
+category: crypto
+difficulty: hard
+author: Giyosiddin
+host_port: 12000
+internal_ports: []
+image: ctf/crypto-bls-orchestra:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "Difficulty tier (source): insane. BLS rogue-key aggregate-signature attack (Rust orchestra service); forge an aggregate over a key you never held. Rust service (built in-container). smoke_test is blocked: the solver in solution/ shells out to a native rust 'orchestra' helper (AVX-512 / x86-64-v4) that is not runnable on this host."

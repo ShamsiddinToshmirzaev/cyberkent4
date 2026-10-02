@@ -1,0 +1,21 @@
+{
+  "_comment": "Pragmatic hardening profile for the C02 containers: allow by default but block syscalls a crypto service never needs and that broaden a container escape. For a stricter posture, replace with a default-deny allowlist. Combined with read_only rootfs + no-new-privileges + an internal-only network for the appliance.",
+  "defaultAction": "SCMP_ACT_ALLOW",
+  "architectures": ["SCMP_ARCH_X86_64", "SCMP_ARCH_X86", "SCMP_ARCH_X32"],
+  "syscalls": [
+    {
+      "names": [
+        "ptrace", "process_vm_readv", "process_vm_writev",
+        "mount", "umount", "umount2", "pivot_root", "chroot",
+        "kexec_load", "kexec_file_load", "finit_module", "init_module",
+        "delete_module", "reboot", "swapon", "swapoff",
+        "add_key", "request_key", "keyctl",
+        "bpf", "perf_event_open", "acct", "settimeofday", "clock_settime",
+        "setns", "unshare", "mknod", "mknodat",
+        "sethostname", "setdomainname", "iopl", "ioperm"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1
+    }
+  ]
+}

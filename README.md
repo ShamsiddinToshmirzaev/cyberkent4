@@ -70,7 +70,7 @@ Resetting or rebuilding one task never touches another.
 git-ignored `flags.env` / `db.env`, injected into the container at *runtime* via `env_file`.
 Committed `*.env.example` files document the shape. Apps read `FLAG` from the environment. The
 `.gitignore` enforces this (`**/flags.env`, `**/db.env`, `*.pem`, `*.key`). Flag format:
-`CTF{...}` (lowercase, snake_case).
+`CTF4{...}` (lowercase, snake_case).
 
 **`ports.csv` is the single source of truth for host ports.** A challenge's `.env` `HOST_PORT`
 must equal its `ports.csv` row. `./ctfctl ports` fails on duplicates or drift.
@@ -118,17 +118,27 @@ omitted). `make` wraps each: `make <target>` or `make T=<slug> <target>`.
 
 | Command | What it does |
 |---------|--------------|
-| `./ctfctl up [slug\|all]` | Build + start detached (`compose up -d --build`). Warns if `flags.env` is missing. |
+| `./ctfctl up [slug\|all] [-j N]` | Build + start detached (`compose up -d --build`). Warns if `flags.env` is missing. |
 | `./ctfctl down [slug\|all]` | Stop, **keep** volumes (`compose down`). |
-| `./ctfctl reset [slug\|all]` | **DESTRUCTIVE:** `compose down -v` + `up` — wipes that task's volumes and re-provisions. Scoped to the one task. |
-| `./ctfctl build [slug\|all]` | Build images only. |
+| `./ctfctl reset [slug\|all] [-j N]` | **DESTRUCTIVE:** `compose down -v` + `up` — wipes that task's volumes and re-provisions. Scoped to the one task. |
+| `./ctfctl build [slug\|all] [-j N]` | Build images only. |
 | `./ctfctl status [slug\|all]` | Table of `SLUG PORT PORTCHK CONTAINERS` — container states + host-port reachability. |
-| `./ctfctl test [slug\|all]` | Run each task's `solution/smoke_test.py` against the live host port. Any FAIL → non-zero exit. |
+| `./ctfctl test [slug\|all] [-j N]` | Run each task's `solution/smoke_test.py` against the live host port. Any FAIL → non-zero exit. |
+| `./ctfctl new <slug> [--archetype python\|lamp-php\|lamp-db] [--difficulty D] [--stateful]` | Scaffold a new challenge from a template, **auto-assigning a free port** and generating secrets. |
+| `./ctfctl add <slug>` | **Register a conforming submission** already dropped in `challenges/<slug>/`: lint → assign port → `proposed_port`→`host_port` → `ports.csv` row → secrets. |
+| `./ctfctl lint [slug\|all]` | Static conformance check (files, `challenge.yml` schema, coupling rules, compose invariants, secret hygiene). The submission gate. |
+| `./ctfctl secrets [slug\|all]` | Create missing `flags.env`/`db.env` from `*.example` with random values (never overwrites). |
+| `./ctfctl rotate [slug\|all]` | Regenerate `flags.env`/`db.env` (rotate secrets); `reset`/`up` after to apply new DB passwords. |
 | `./ctfctl ports` | Validate `ports.csv`: no duplicate host ports, no `.env`↔registry drift. Must print `ports OK`. |
+| `./ctfctl gen-cron` | Regenerate `ops/reset.cron` from each `challenge.yml reset.policy` (auto-staggered). Don't hand-edit the cron. |
+| `./ctfctl index [--json]` | Fleet table from `challenge.yml` (name/port/category/difficulty/stateful). |
+| `./ctfctl capacity` | Sum `deploy.resources.limits` across the fleet vs the host budget (`HOST_MEM_MB`/`HOST_CPUS` in `.env.global`). |
 | `./ctfctl firewall` | **Print** (does not apply) `ufw` rules derived from `ports.csv` + `ADMIN_CIDR`. |
 | `./ctfctl scoreboard` | Print the `slug,category,endpoint,flag` manifest for the scoreboard. |
+| `./ctfctl install-hooks` | Point git at `ops/hooks` so the pre-commit hook runs `lint all` + blocks staged secrets. |
 
-Multi-slug example: `./ctfctl test web-silent-channel web-joombreaker`.
+Multi-slug example: `./ctfctl test web-silent-channel web-joombreaker`. `-j N` runs
+`build`/`up`/`reset`/`test` with up to N in parallel (important at fleet scale; default serial).
 
 **Smoke-test environment.** `./ctfctl test` runs each test under `timeout 120 python3` with two
 env vars — the same contract authors code against:
@@ -187,25 +197,45 @@ Per-task gotchas worth knowing:
 - These three were migrated from `raw_tasks/` (third-party submissions) and refitted to the template
   (compose, secrets externalised to `flags.env`/`db.env`, hardening, healthchecks, smoke tests).
 
-## Adding a challenge
+## Adding challenges (at scale)
 
-The full workflow, conventions, and a worked example are in the author handbook —
-[`docs/CREATING-A-CHALLENGE.md`](docs/CREATING-A-CHALLENGE.md). Start from a scaffold:
+`challenge.yml` is the per-challenge source of truth; `ctfctl` reads it to lint, generate the
+reset cron, index the fleet, and estimate capacity. Two entry points, both of which auto-assign a
+free port and generate secrets so you never hand-edit `ports.csv` or copy `.example` files:
+
+**Author a new one** (scaffolds a runnable placeholder from an archetype — see [`templates/`](templates/)):
 
 ```bash
-cp -r _template challenges/web-mytask      # or: cp -r docs/challenge-template ...
-# add a ports.csv row, fill in challenge.yml + .env + build/, create flags.env,
-# write solution/smoke_test.py, then:
-./ctfctl ports && ./ctfctl up web-mytask && ./ctfctl test web-mytask
+./ctfctl new web-mytask --archetype lamp-db     # python | lamp-php | lamp-db
+# edit build/ + solution/smoke_test.py to be the real challenge, then:
+./ctfctl lint web-mytask && ./ctfctl up web-mytask && ./ctfctl test web-mytask
 ```
 
-A complete, runnable reference challenge lives at
-[`docs/examples/web-pinger/`](docs/examples/web-pinger/) — build it, solve it, or copy it.
+**Register a submission** from a task author (the common path — they send a conforming
+`challenges/<slug>/` folder built per [`docs/CREATING-A-CHALLENGE.md`](docs/CREATING-A-CHALLENGE.md)):
+
+```bash
+# drop their folder into challenges/web-theirtask/ (with a proposed_port), then:
+./ctfctl add web-theirtask          # lint -> assign real port -> ports.csv -> secrets -> re-lint
+./ctfctl up web-theirtask && ./ctfctl test web-theirtask
+```
+
+**The gate.** `./ctfctl lint [slug|all]` statically checks the invariant contract (required files,
+`challenge.yml` schema + coupling rules, compose hardening, secret hygiene). Run
+`./ctfctl install-hooks` once so the pre-commit hook (`ops/hooks/pre-commit`) blocks any commit
+that fails `lint all` or stages a `flags.env`/`db.env`. A complete runnable reference challenge
+lives at [`docs/examples/web-pinger/`](docs/examples/web-pinger/).
+
+**Capacity.** Before an event, `./ctfctl capacity` sums the fleet's memory/CPU limits against the
+host budget (`HOST_MEM_MB`/`HOST_CPUS` in `.env.global`). This is the real ceiling at ~50 shared
+challenges (many LAMP+MariaDB at ~1–1.5 GB each): if it warns, size up the VM or split across hosts.
 
 ## Operations
 
 - **Stateful auto-reset.** `ops/reset.cron` periodically runs `./ctfctl reset <slug>` for the
-  stateful tasks so shared-player damage self-heals. Install with `crontab -u ctf ops/reset.cron`.
+  stateful tasks so shared-player damage self-heals. It is **generated** — run `./ctfctl gen-cron`
+  after adding/removing challenges (it reads each `challenge.yml reset.policy`), then install with
+  `crontab -u ctf ops/reset.cron`. Don't hand-edit it.
 - **Monitoring / canary.** Run `./ctfctl status all` for health and `./ctfctl test all` every
   15–30 min as a canary — it catches "solvable path broke" and "flag deleted, reset not yet run".
 - **Firewall.** `./ctfctl firewall > /tmp/fw.sh`, review, then `sudo bash /tmp/fw.sh`. Default

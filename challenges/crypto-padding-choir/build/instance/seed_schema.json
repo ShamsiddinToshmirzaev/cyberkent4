@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "C02 instance",
+  "description": "Author-side instance file emitted by generate.py. NEVER given to players.",
+  "type": "object",
+  "required": ["id", "profile", "seed", "rsa", "appliance_key_pem", "issuer_tag",
+               "flag", "allowlist_roles", "archive_role", "params", "net", "sample"],
+  "properties": {
+    "id": {"const": "C02-padding-choir"},
+    "profile": {"enum": ["dev", "prod"]},
+    "seed": {"type": "integer"},
+    "rsa": {
+      "type": "object",
+      "required": ["bits", "e", "k", "n", "d", "p", "q"],
+      "properties": {
+        "bits": {"type": "integer"},
+        "e": {"type": "integer"},
+        "k": {"type": "integer", "description": "modulus size in bytes"},
+        "n": {"type": "string"}, "d": {"type": "string"},
+        "p": {"type": "string"}, "q": {"type": "string"}
+      }
+    },
+    "appliance_key_pem": {"type": "string", "description": "path (rel to challenge root) to the RSA private key; loaded ONLY by the appliance"},
+    "issuer_tag": {"type": "string", "description": "16-byte per-instance genuineness secret (hex)"},
+    "flag": {"type": "string"},
+    "allowlist_roles": {"type": "array", "items": {"type": "string"},
+                         "description": "roles the appliance will import (must exclude archive_role)"},
+    "archive_role": {"type": "string", "description": "role the policy grants the archive to"},
+    "params": {
+      "type": "object",
+      "properties": {
+        "der_work_factor": {"type": "integer", "description": "canonicalisation repetitions => size of the timing gap"},
+        "worker_count": {"type": "integer", "description": "bounded concurrent crypto ops in the appliance"},
+        "cross_traffic_rate_hz": {"type": "number", "description": "decoy load the gateway drives onto the appliance (queue noise)"},
+        "jitter_ms_mu": {"type": "number"}, "jitter_ms_sigma": {"type": "number"},
+        "rate_tokens": {"type": "integer"}, "rate_refill_hz": {"type": "number"},
+        "query_budget": {"type": "integer"},
+        "coarse_ts_ms": {"type": "integer"}
+      }
+    },
+    "net": {
+      "type": "object",
+      "properties": {
+        "gateway_host": {"type": "string"}, "gateway_port": {"type": "integer"},
+        "appliance_host": {"type": "string"}, "appliance_port": {"type": "integer"}
+      }
+    },
+    "sample": {
+      "type": "object",
+      "description": "the guest ticket handed to the player (ciphertext) + author ground truth",
+      "properties": {
+        "role": {"const": "guest"},
+        "seat": {"type": "string"},
+        "plaintext_em_hex": {"type": "string"},
+        "ciphertext_hex": {"type": "string"}
+      }
+    }
+  }
+}

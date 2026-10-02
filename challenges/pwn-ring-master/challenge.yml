@@ -1,0 +1,19 @@
+name: "Ring Master"
+slug: pwn-ring-master
+category: pwn
+difficulty: hard
+author: Giyosiddin
+host_port: 11006
+internal_ports: []
+image: ctf/pwn-ring-master:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET:5000"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "I/O race unlocks a ring buffer mid-operation -> use-after-free; hijack the deliver callback to flag_reader."
+
+hardening_note: "entrypoint starts as root to place a read-only root:0444 flag + self-heal watchdog, then setpriv-drops to uid 1000 for the vuln; requires cap_add [SETUID,SETGID] with cap_drop [ALL]."

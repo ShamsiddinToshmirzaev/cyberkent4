@@ -1,0 +1,6 @@
+{
+  "id": "C08-threshold-theatre",
+  "gateway_host": "127.0.0.1",
+  "gateway_port": 9080,
+  "note": "GET /info for the Paillier public key, the group public key, and the target."
+}

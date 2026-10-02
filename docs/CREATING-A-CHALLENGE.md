@@ -35,8 +35,14 @@ Three rules are non-negotiable. Everything else in this doc explains how to sati
    (non-root, read-only rootfs, dropped capabilities, resource limits) unless the image
    physically can't (LAMP), in which case you declare a documented exception.
 
-Flag format is always `CTF{...}` — lowercase inner text, `snake_case`, e.g.
-`CTF{alg_confusion_is_not_your_friend}`.
+Flag format is always `CTF4{...}` — lowercase inner text, `snake_case`, e.g.
+`CTF4{alg_confusion_is_not_your_friend}`.
+
+**How your submission is accepted.** You hand us a `challenge-template`-shaped folder (this
+handbook's starter is the `python`/Flask shape; PHP and PHP+MySQL shapes exist too). We drop it
+into the fleet with one command that lints it, assigns the real port, and generates production
+secrets — so a submission that follows the **Submission checklist** at the bottom goes in cleanly.
+Anything that fails the checklist is bounced back, so self-check against it before sending.
 
 ---
 
@@ -59,7 +65,7 @@ $EDITOR build/app.py
 
 # 4. Create the REAL flag. Keep flags.env OUT of your submission — send it to us separately.
 cp flags.env.example flags.env
-$EDITOR flags.env        # FLAG=CTF{...}
+$EDITOR flags.env        # FLAG=CTF4{...}
 
 # 5. Build + run it locally.
 docker compose up --build       # serves on http://127.0.0.1:<HOST_PORT>
@@ -88,7 +94,7 @@ web-mytask/
 ├── .env                   # NON-secret runtime vars (slug, category, HOST_PORT, image tag)
 ├── .env.example           # placeholder shape of .env
 ├── flags.env              # REAL flag  — you create it; DO NOT include it in the submission
-├── flags.env.example      # placeholder (FLAG=CTF{REPLACE_ME})
+├── flags.env.example      # placeholder (FLAG=CTF4{REPLACE_ME})
 ├── db.env                 # REAL db creds — STATEFUL tasks only; also kept out of the submission
 ├── db.env.example         # placeholder (STATEFUL tasks only)
 ├── build/                 # everything COPY'd into the image
@@ -260,7 +266,7 @@ internal_ports: []
 image: ctf/web-pinger:1.0.0
 stateful: false
 healthcheck_url: "http://TARGET/"
-flag_format: "CTF{...}"
+flag_format: "CTF4{...}"
 solution:
   cmd: "python3 solution/smoke_test.py"
 reset:
@@ -282,7 +288,7 @@ IMAGE=ctf/web-pinger:1.0.0
 
 ```bash
 cp flags.env.example flags.env
-echo 'FLAG=CTF{n3ver_sh3ll_out_with_user_1nput}' > flags.env
+echo 'FLAG=CTF4{n3ver_sh3ll_out_with_user_1nput}' > flags.env
 ```
 
 ### 8.5 `build/app.py`
@@ -300,7 +306,7 @@ from flask import Flask, request, render_template_string
 app = Flask(__name__)
 
 # Flag is injected at runtime via flags.env — NEVER hardcode it here.
-FLAG = os.environ.get("FLAG", "CTF{local_test_flag}")
+FLAG = os.environ.get("FLAG", "CTF4{local_test_flag}")
 
 PAGE = """
 <!doctype html>
@@ -415,7 +421,7 @@ def solve():
         params={"host": "127.0.0.1; printenv FLAG"},
         timeout=10,
     )
-    m = re.search(r"CTF\{[^}]*\}", r.text)
+    m = re.search(r"CTF4\{[^}]*\}", r.text)
     return m.group(0) if m else ""
 
 
@@ -445,7 +451,7 @@ TARGET=http://127.0.0.1:10010 FLAGS_ENV="$PWD/flags.env" \
 Expected output:
 
 ```
-[captured] 'CTF{n3ver_sh3ll_out_with_user_1nput}'
+[captured] 'CTF4{n3ver_sh3ll_out_with_user_1nput}'
 PASS
 ```
 
@@ -468,7 +474,7 @@ Run through this before handing the challenge back. All must be true:
 - [ ] Every service keeps the full hardening contract (Section 4); any drop is a LAMP image and is
       listed in `hardening_exceptions`.
 - [ ] No flag or credential appears in `build/`, the Dockerfile, `.env`, or any file you're
-      sending. Quick check: `grep -rn "CTF{" .` finds it only in `solution/` comments, if anywhere.
+      sending. Quick check: `grep -rn "CTF4{" .` finds it only in `solution/` comments, if anywhere.
 - [ ] Stateful only: DB is on an `internal: true` network and **not** published; provisioning is
       idempotent (start twice, still solvable).
 - [ ] Package **without** `flags.env` / `db.env`

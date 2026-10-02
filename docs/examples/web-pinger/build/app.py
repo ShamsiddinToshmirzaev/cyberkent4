@@ -6,7 +6,7 @@ from flask import Flask, request, render_template_string
 app = Flask(__name__)
 
 # Flag is injected at runtime via flags.env — NEVER hardcode it here.
-FLAG = os.environ.get("FLAG", "CTF{local_test_flag}")
+FLAG = os.environ.get("FLAG", "CTF4{local_test_flag}")
 
 PAGE = """
 <!doctype html>

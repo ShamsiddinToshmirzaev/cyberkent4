@@ -22,6 +22,7 @@ of one-off challenges into a standardized, operable fleet.
 ctfctl              # fleet manager (bash). The operational entrypoint.
 Makefile            # sugar: `make up`, `make T=<slug> up`, ...
 ports.csv           # CENTRAL PORT REGISTRY — single source of truth
+                    # cols: slug,category,host_port,internal_ports,image,author,notes
 registry/images.txt # base images to pre-pull before the event
 _template/          # copy this to add a new challenge (see _template/README.md)
 challenges/<slug>/  # one independent compose project per task
@@ -37,23 +38,36 @@ Each task is its own compose project (`docker compose -p <slug>`), so everything
 to one task. Run from the repo root:
 ```
 ./ctfctl ports              # validate ports.csv (no dupes / no drift vs each .env)
-./ctfctl up   [slug|all]    # build + start
-./ctfctl down [slug|all]    # stop, keep volumes
-./ctfctl reset [slug|all]   # DESTRUCTIVE: down -v + up (wipe state + re-provision)
-./ctfctl build [slug|all]
-./ctfctl status [slug|all]  # containers + host-port reachability
-./ctfctl test  [slug|all]   # run solution/smoke_test.py against the live host_port
+./ctfctl up/down/reset/build/status/test [slug|all] [-j N]   # lifecycle; -j runs in parallel
 ./ctfctl firewall           # ufw rules from ports.csv
 ./ctfctl scoreboard         # slug,category,endpoint,flag manifest for the scoreboard
 ```
 Accepts multiple slugs (e.g. `./ctfctl test web-silent-channel web-joombreaker`).
 Smoke tests need `requests` + `cryptography` (`pip install -r ops/requirements-solver.txt`).
 
+Scaling/management commands (challenge.yml is the machine-read source of truth):
+```
+./ctfctl new <slug> [--archetype python|lamp-php|lamp-db] [--stateful]  # scaffold + auto-port + secrets
+./ctfctl add <slug>         # register a conforming submission (lint -> port -> ports.csv -> secrets)
+./ctfctl lint [slug|all]    # static conformance gate (also run by ops/hooks/pre-commit)
+./ctfctl secrets|rotate [slug|all]   # generate / regenerate flags.env + db.env (random values)
+./ctfctl gen-cron           # regenerate ops/reset.cron from challenge.yml reset.policy (don't hand-edit)
+./ctfctl index [--json]     # fleet table from challenge.yml
+./ctfctl capacity           # sum resource limits vs HOST_MEM_MB/HOST_CPUS (.env.global)
+./ctfctl install-hooks      # git core.hooksPath -> ops/hooks
+```
+Archetype templates live in `templates/`; `docs/challenge-template/` is the author-facing copy of
+the `python` archetype (keep in sync). The linter enforces the invariant contract, so `lint all`
+must stay green.
+
 ## Conventions — ENFORCE for every new task
-- Flag format: `CTF{...}`.
+- Flag format: `CTF4{...}` (event-wide; changed from `CTF{...}` on 2026-10-02). The linter
+  enforces `flag_format: "CTF4{...}"` and `gen_flag` emits `CTF4{<hex>}`.
 - **Never** put flags/creds in Dockerfiles, source, or image layers. Real values live only in
   git-ignored `flags.env` / `db.env`; commit `*.env.example` placeholders. Apps read `FLAG`
-  from the environment.
+  from the environment. (A flag-building idiom `CTF4{"+...` in source is allowed by the linter;
+  a task that intentionally bakes **decoy** flags must declare `decoy_flags: true` in
+  `challenge.yml` to downgrade the build/ baked-flag check to a warning.)
 - Every service: `restart: unless-stopped`, CPU/mem/pids limits, json-file log rotation
   (`max-size:10m max-file:3`), `no-new-privileges`, a healthcheck, and `ctf.*` labels.
 - Databases go on an `internal: true` network and are **never** host-published.
@@ -62,8 +76,12 @@ Smoke tests need `requests` + `cryptography` (`pip install -r ops/requirements-s
   `hardening_exceptions` and keep the rest of the hardening.
 - Port ranges: web `10000–10999`, pwn `11000–11999`, crypto `12000–12999`, misc/rev `13000+`.
   Add the row to `ports.csv` first; `./ctfctl ports` must stay green.
+- Every `challenge.yml` carries an `author:` (the incident contact who can fix it live). `ctfctl
+  add`/`new` copy it into the `author` column of `ports.csv`, and `./ctfctl index` shows it.
 
-## Current challenges (all web)
+## Current challenges
+
+### web
 | slug | port | stateful | vuln |
 |------|------|----------|------|
 | web-jwtopia | 10001 | no | JWT RS256→HS256 alg-confusion + Jinja2 SSTI |
@@ -74,15 +92,67 @@ Smoke tests need `requests` + `cryptography` (`pip install -r ops/requirements-s
 | web-intranet | 10006 | no | hidden dir + X-Forwarded-For/cookie auth bypass → LFI |
 | web-neon-auth | 10007 | yes | leaked vim .swp source → SQLi LOAD_FILE (in-container MariaDB) |
 | web-sql-console | 10008 | yes | SQLi WAF-bypass → hidden SQL console → LOAD_FILE (in-container MariaDB) |
+| web-metaguard | 10000 | no | SSRF chain → cloud IMDS creds → admin unlock |
+
+### crypto (all stateless; TCP line-protocol gateways on :5000)
+| slug | port | vuln |
+|------|------|------|
+| crypto-bls-orchestra | 12000 | BLS rogue-key aggregate-signature forgery (Rust service) |
+| crypto-cbor-time-machine | 12001 | CBOR canonicalization / replay |
+| crypto-chain-of-misfortune | 12002 | hash/commitment chain break |
+| crypto-dilithium-drift | 12003 | Dilithium signature nonce/drift |
+| crypto-entropy-cathedral | 12004 | weak entropy / PRNG recovery |
+| crypto-fever-dream | 12005 | signature forgery |
+| crypto-frostbite-coordinator | 12006 | FROST threshold-signing flaw |
+| crypto-minerva-fm | 12007 | Minerva ECDSA timing lattice (multi-service: init+signer+gateway) |
+| crypto-neon-em-oracle | 12008 | EM/side-channel oracle |
+| crypto-nonce-funeral | 12009 | ECDSA nonce reuse |
+| crypto-padding-choir | 12010 | padding-oracle (multi-service: init+appliance+gateway) |
+| crypto-passkey-doppelganger | 12011 | WebAuthn/passkey RP-binding confusion |
+| crypto-rsa-museum | 12012 | RSA misuse |
+| crypto-threshold-theatre | 12013 | threshold-signature flaw |
+
+### pwn (all stateless; binaries served on :5000)
+| slug | port | vuln |
+|------|------|------|
+| pwn-appleseed | 11000 | house-of-apple2 _IO_FILE (FSOP) overflow |
+| pwn-blindfmt | 11001 | blind format-string oracle |
+| pwn-coldcache | 11002 | safe-linking shift-xor leak |
+| pwn-jitterbug | 11003 | JIT spray via unblinded immediates |
+| pwn-nine-lives | 11004 | fastbin dup + realloc trick |
+| pwn-phantom | 11005 | sigreturn-oriented programming (SROP) |
+| pwn-ring-master | 11006 | io_uring I/O-race UAF |
+| pwn-singularity | 11007 | seccomp filter missing arch check |
+| pwn-verifier-ex | 11008 | verifier state-merge logic bug |
+
+### misc
+| slug | port | vuln |
+|------|------|------|
+| misc-honeypot | 13000 | AEAD handshake beats prompt-injection decoys/banner |
 
 Per-task specifics worth knowing:
+- **_sort1 batch (24 crypto/pwn/misc + web-metaguard), added 2026-10-02** from
+  `raw_tasks/_sort1/` zips. Authored against this template; two fleet fixups on intake:
+  (1) their shared external `ctffleet` network was rewritten to the repo's per-task
+  `frontend: driver: bridge` (the two multi-service crypto keep an `internal: true` net —
+  only the gateway publishes `${HOST_PORT}:5000`); (2) ports auto-assigned via `ctfctl add`
+  (NOT the submissions' `proposed_port` / `FLAGS-AND-PORTS.csv`) and flags freshly randomized
+  via `ctfctl secrets` — scoreboard must re-import from `./ctfctl scoreboard`.
+- Every app reads the real flag from `FLAG` env; the `CTF4{"+hmac(...)` lines in crypto
+  `generate.py` are only a dev fallback (env wins). **misc-honeypot** and **web-metaguard**
+  bake intentional *decoy* flags, declared via a new `decoy_flags: true` key in `challenge.yml`
+  that the linter honors (downgrades the build/ baked-flag check to a warning for that task).
+- Smoke tests that can't self-solve in a plain CI env (deploy fine, serve the correct flag):
+  **crypto-bls-orchestra** (needs a native AVX-512/x86-64-v4 Rust helper) and
+  **crypto-passkey-doppelganger** (needs the per-player credential handout, not exposed by the
+  live `/info`). pwn smoke tests need `pwntools` (absent locally). Verify these on the event host.
 - **web-docparser** is a single container ON PURPOSE — its exploit is XXE→SSRF to
   `127.0.0.1:7777`, so the internal service must share the app's localhost. Do not split it.
 - **web-joombreaker** replaced a host-side `start.sh` (which did global `docker rm -f` and
   host `docker exec`) with an **idempotent init container** (`build/` = php:8.1-cli image that
   runs `provision.sh`). It talks to MySQL with `--skip-ssl` because the Debian mariadb client
-  rejects MySQL 8's self-signed TLS cert. `build/start.sh.orig` is the old script, kept for
-  reference (git-ignored via `*.orig`).
+  rejects MySQL 8's self-signed TLS cert. (The old `build/start.sh.orig` reference script was
+  **deleted** — it contained a compromised real flag that `ctfctl lint` flagged.)
 - **web-silent-channel** writes the flag at container start from `$FLAG` (perms 640
   root:www-data) via `build/flag-entrypoint.sh`; WordPress auto-installs via the `wpcli`
   one-shot (idempotent). WP 5.6 uses plain permalinks, so REST is at `/?rest_route=/`.
@@ -97,8 +167,8 @@ Per-task specifics worth knowing:
   idempotent DROP/CREATE). The deliberate vuln knobs — `secure_file_priv=""`, `GRANT FILE`, and
   sql-console's empty root password — are the intended bugs, listed in each `hardening_exceptions`.
   web-intranet writes the flag only into the hidden LFI directory (no site-root `/flag.txt`).
-- Entrypoints set the flag default as `FLAG="${FLAG:-}"; [ -n "$FLAG" ] || FLAG='CTF{...}'` — an
-  inline `${FLAG:-CTF{...}}` default mis-parses the nested brace and appends a stray `}`.
+- Entrypoints set the flag default as `FLAG="${FLAG:-}"; [ -n "$FLAG" ] || FLAG='CTF4{...}'` — an
+  inline `${FLAG:-CTF4{...}}` default mis-parses the nested brace and appends a stray `}`.
 
 ## Operations for 1000 shared players
 - Stateful tasks (silent-channel, joombreaker) get trashed by shared players → **auto-reset on
@@ -115,6 +185,36 @@ Per-task specifics worth knowing:
   (idempotent). Their MariaDB 3306 is not host-reachable; only 10006–10008 published. `./ctfctl
   ports` green. NOT re-run for the original 5 in this session (their folders were untouched), and
   NOT committed.
+- 2026-09-30 (scaling): extended `ctfctl` with `new`/`add`/`lint`/`secrets`/`rotate`/`gen-cron`/
+  `index`/`capacity`/`install-hooks` + `-j` parallelism; added `templates/` archetypes,
+  `ops/hooks/pre-commit`, Makefile targets. `./ctfctl lint all` green on all 8 (fixed joombreaker
+  image mismatch, removed the compromised `start.sh.orig`). Verified `new` (python/lamp-php/lamp-db)
+  and `add` round-trips build+lint+test PASS. Not committed.
+
+- 2026-10-02 (_sort1 batch): added 25 challenges — 14 crypto (12000–12013), 9 pwn
+  (11000–11008), misc-honeypot (13000), web-metaguard (10000). `./ctfctl ports` green;
+  `./ctfctl lint all` green on all 33. Patched the lint secrets-gate: allow the `CTF4{"`
+  flag-building idiom + a declared `decoy_flags: true` opt-in. Networks conformed to
+  `frontend` bridge. Representative python tasks verified end-to-end (healthy + correct
+  flag): crypto-rsa-museum, crypto-nonce-funeral, misc-honeypot, web-metaguard PASS smoke;
+  crypto-passkey-doppelganger deploys healthy (smoke needs out-of-band handout). All 25
+  images built. Full build/up/smoke across rust/go/pwn deferred to the ESXi host. Not committed.
+
+- 2026-10-02 (flag format -> CTF4): switched the whole fleet (all 33) from `CTF{...}` to
+  `CTF4{...}`. `gen_flag`, the lint `flag_format` gate, and the secrets-scan regex (`CTF4?\{`)
+  updated in `ctfctl`; swept `CTF{`->`CTF4{` (and regex `CTF\{`->`CTF4\{`) across all
+  build/ + solution/ source, `challenge.yml`, and `flags.env.example` (150 literal + 30 regex
+  sites, incl. crypto `validate.py` prefix guards, honeypot decoys + the `0x43 0x54 0x46 7B`
+  byte literal -> `...0x34 0x7B`, and all solver/smoke regexes). Re-ran `ctfctl rotate all`
+  (flags.env now `CTF4{...}`). `lint all` + `ports` green; rebuilt+smoked rsa-museum,
+  nonce-funeral, honeypot, web-metaguard, web-jwtopia -> all PASS. Not committed.
+
+- 2026-10-02 (authorship): recorded per-challenge authors for incident contact — Shams (first
+  5 web: jwtopia, silent-channel, docparser, token-ghost, joombreaker), Falcon (intranet,
+  neon-auth, sql-console), Giyosiddin (the 25 _sort1 tasks). Stored in each `challenge.yml`
+  `author:` (source of truth), surfaced as a new `author` column in `ports.csv` (col 6, before
+  notes — cols 1–5 unchanged so all `field()` reads still valid) and in `./ctfctl index`
+  (table + `--json`). `ctfctl add`/`new` now populate the column. Not committed.
 
 ## Outstanding decisions / TODO for the owner
 - [ ] **Rotate all flags + DB passwords** — the originals were committed in the old repo, so

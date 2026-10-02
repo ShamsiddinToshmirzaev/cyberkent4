@@ -1,0 +1,17 @@
+name: "Entropy Cathedral"
+slug: crypto-entropy-cathedral
+category: crypto
+difficulty: hard
+author: Giyosiddin
+host_port: 12004
+internal_ports: []
+image: ctf/crypto-entropy-cathedral:1.0.0
+stateful: false
+healthcheck_url: "tcp://TARGET"
+flag_format: "CTF4{...}"
+solution:
+  cmd: "python3 solution/smoke_test.py"
+reset:
+  policy: none
+hardening_exceptions: []
+notes: "Difficulty tier (source): final-boss. KMS entropy source with endian/epoch confusion in seed mixing; predict the RNG and ring the entropy bell."

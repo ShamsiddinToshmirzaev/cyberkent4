@@ -1,0 +1,8 @@
+{
+  "n": "0x978b0de862e524059abe53052fa21e79d77aadbe2698e6af2eb2ea681993c6c67423397bbbf9d5f0f42b8da5fa9a2afb1b58506bc1daef291555d70e63fa7129",
+  "e": 65537,
+  "k": 64,
+  "gateway_host": "127.0.0.1",
+  "gateway_port": 9020,
+  "query_budget": 5000000
+}

@@ -1,0 +1,107 @@
+name: ${CTF_SLUG}
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-hardening: &hardening
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp
+  logging: *default-logging
+  deploy:
+    resources:
+      limits:
+        cpus: "1.0"
+        memory: 512M
+        pids: 256
+
+services:
+  # one-shot provisioner: derives the P-256 key + flag from FLAG (flags.env) into
+  # the internal key/gw volumes. Only this service sees the flag env.
+  init:
+    <<: *hardening
+    build: ./build
+    image: ${IMAGE}
+    container_name: ctf_${CTF_SLUG}_init
+    user: root
+    env_file:
+      - ./flags.env
+    command: ["sh","-c","python3 instance/generate.py --profile prod --gateway-port 5000 --signer-port 5001 --out /key/instance.json --gateway-out /gw/gateway.json --player-dir /gw/samples && chmod -R a+rX /key /gw"]
+    volumes:
+      - key:/key
+      - gw:/gw
+    networks: [internal]
+    restart: "no"
+    labels:
+      ctf.task: "${CTF_SLUG}"
+      ctf.category: "${CTF_CATEGORY}"
+      ctf.port: "${HOST_PORT}"
+
+  # secret-holding C signer (holds d); internal only, never published.
+  signer:
+    <<: *hardening
+    image: ${IMAGE}
+    container_name: ctf_${CTF_SLUG}_signer
+    user: "1000:1000"
+    command: ["python3","deploy/signer_entry.py"]
+    environment:
+      INSTANCE: /key/instance.json
+      SIGNER_BIND: 0.0.0.0
+    volumes:
+      - key:/key:ro
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    networks: [internal]
+    labels:
+      ctf.task: "${CTF_SLUG}"
+      ctf.category: "${CTF_CATEGORY}"
+      ctf.port: "${HOST_PORT}"
+
+  # player-facing gateway (holds the flag, no private key); the only published port.
+  gateway:
+    <<: *hardening
+    image: ${IMAGE}
+    container_name: ctf_${CTF_SLUG}_gateway
+    user: "1000:1000"
+    command: ["python3","src/gateway/gateway.py"]
+    environment:
+      INSTANCE: /gw/gateway.json
+      GATEWAY_BIND: 0.0.0.0
+      SIGNER_HOST: signer
+    volumes:
+      - gw:/gw:ro
+    ports:
+      - "${HOST_PORT}:5000"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      signer:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; socket.create_connection(('127.0.0.1',5000),3).close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [frontend, internal]
+    labels:
+      ctf.task: "${CTF_SLUG}"
+      ctf.category: "${CTF_CATEGORY}"
+      ctf.port: "${HOST_PORT}"
+
+networks:
+  frontend:
+    driver: bridge
+  internal:
+    internal: true
+
+volumes:
+  key: {}
+  gw: {}
