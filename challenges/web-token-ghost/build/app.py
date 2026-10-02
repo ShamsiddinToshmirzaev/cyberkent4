@@ -26,12 +26,7 @@ PUBLIC_PEM = PUBLIC_KEY.public_bytes(
     serialization.PublicFormat.SubjectPublicKeyInfo,
 )
 
-FLAG = os.environ.get("FLAG", "ctf4{test_flag}")
-FLAG_PATH = "/tmp/flag.txt"
-
-# Write flag to disk so SSTI popen('cat /tmp/flag.txt') works
-with open(FLAG_PATH, "w") as f:
-    f.write(FLAG)
+FLAG = os.environ.pop("FLAG", "ctf4{test_flag}")
 
 
 def _b64url(n: int) -> str:

