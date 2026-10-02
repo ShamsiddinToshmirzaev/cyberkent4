@@ -11,7 +11,7 @@ with open('/app/keys/private.pem', 'rb') as f:
 with open('/app/keys/public.pem', 'rb') as f:
     PUBLIC_KEY = f.read()
 
-FLAG = os.environ.get('FLAG', 'ctf4{test_flag}')
+FLAG = os.environ.pop('FLAG', 'ctf4{test_flag}')
 
 USERS = {
     'guest': {'password': 'guest123',          'role': 'user'},

