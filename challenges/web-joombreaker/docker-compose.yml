@@ -44,11 +44,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      JOOMLA_DB_HOST: "${JOOMLA_DB_HOST}"
-      JOOMLA_DB_USER: "${JOOMLA_DB_USER}"
-      JOOMLA_DB_PASSWORD: "${JOOMLA_DB_PASSWORD}"
-      JOOMLA_DB_NAME: "${JOOMLA_DB_NAME}"
+    env_file:
+      - ./db.env
     ports:
       - "${HOST_PORT}:80"
     volumes:

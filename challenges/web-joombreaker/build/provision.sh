@@ -22,7 +22,12 @@ export CTF_DB_NAME CTF_DB_USER CTF_DB_PASSWORD CTF_DB_HOST="$DBH" CTF_ADMIN_EMAI
 
 log(){ echo "[provision] $*"; }
 
-write_flag(){ printf '%s\n' "$FLAG" > "/flag.txt"; chmod 444 "/flag.txt" || true; }
+write_flag(){
+    printf '%s\n' "$FLAG" > "$HTML/flag.txt"
+    chmod 444 "$HTML/flag.txt" || true
+    # Block direct HTTP access; webshell reads via: cmd=cat+/var/www/html/flag.txt
+    printf '\n<Files "flag.txt">\n    Require all denied\n</Files>\n' >> "$HTML/.htaccess"
+}
 
 log "waiting for Joomla files in shared volume..."
 for _ in $(seq 1 60); do [ -f "$HTML/cli/joomla.php" ] && break; sleep 3; done
