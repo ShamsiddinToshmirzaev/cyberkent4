@@ -23,10 +23,15 @@ export CTF_DB_NAME CTF_DB_USER CTF_DB_PASSWORD CTF_DB_HOST="$DBH" CTF_ADMIN_EMAI
 log(){ echo "[provision] $*"; }
 
 write_flag(){
-    printf '%s\n' "$FLAG" > "$HTML/flag.txt"
-    chmod 444 "$HTML/flag.txt" || true
-    # Block direct HTTP access; webshell reads via: cmd=cat+/var/www/html/flag.txt
-    printf '\n<Files "flag.txt">\n    Require all denied\n</Files>\n' >> "$HTML/.htaccess"
+    # root-owned dir: www-data can read but cannot delete files inside
+    mkdir -p "$HTML/.ctf"
+    chown root:root "$HTML/.ctf"
+    chmod 755 "$HTML/.ctf"
+    printf '%s\n' "$FLAG" > "$HTML/.ctf/flag.txt"
+    chown root:root "$HTML/.ctf/flag.txt"
+    chmod 444 "$HTML/.ctf/flag.txt"
+    # Block HTTP access to the directory
+    printf 'Require all denied\n' > "$HTML/.ctf/.htaccess"
 }
 
 log "waiting for Joomla files in shared volume..."
